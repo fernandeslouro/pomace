@@ -21,9 +21,13 @@ Sensors the board will have to process:
  - Stalling of the motors (especially the pomace breaker)
 
 Material needed:
- - Arduino board
+ - Arduino board (mega?)
+ - wifi module
+ - SD card module + SD card
  - Screen
  - A bunch of relays
 
 Web server should be able to:
  - Show the present state of the boiler
+
+Data Storage would be simpler locally using an SD card

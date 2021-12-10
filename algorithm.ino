@@ -1,6 +1,21 @@
 // add necessary constants
 //#define PI 3.14159
- 
+
+class gear_values{
+    public:
+        int gear_fan_speed;
+        int motor_working;
+        int motor_stopped;
+};
+
+void gear(gear_values *present_gear){
+
+    digitalWrite(7,HIGH);// turn relay ON
+    delay(present_gear->motor_working * 1000);
+    digitalWrite(7, LOW);// turn relay OFF
+    delay(present_gear->motor_stopped * 1000);
+}
+
 double temp_measure(int pin){
 
     const double beta = 3600.0;
@@ -28,14 +43,16 @@ double temp_measure(int pin){
 }
 
 
-
-void setup(){
-
-    const int pinBoilerTemp = A0;
+const int pinBoilerTemp = A0;
     const int pinHotWaterTemp = A1;
     const int pinHouseTemp = A2;
     const int pinWasteGasTemp = A3;
     const int pinFlameLight = A4;
+    
+int average_light;    
+void setup(){
+
+    
 
     // Configures specified pin to work as input ou output
     pinMode(7, OUTPUT);// connected to S terminal of Relay
@@ -64,20 +81,7 @@ void setup(){
 
 }
 
-class gear_values{
-    public:
-        int gear_fan_speed;
-        int motor_working;
-        int motor_stopped;
-};
 
-void gear(gear_values *present_gear){
-
-    digitalWrite(7,HIGH);// turn relay ON
-    delay(present_gear->motor_working * 1000);
-    digitalWrite(7, LOW);// turn relay OFF
-    delay(present_gear->motor_stopped * 1000);
-}
 
 void loop(){
 
@@ -91,40 +95,39 @@ void loop(){
     gear_values *medium;
     gear_values *high;
 
-        while(true){
-            boiler_temp = temp_measure(pinBoilerTemp);
+    while(true){
+        boiler_temp = temp_measure(pinBoilerTemp);
 
-            if (boiler_temp < 55){
-                gear(high);
-            } else if (boiler_temp > 55 && boiler_temp < 65){
-                gear(medium);
-            } else if (boiler_temp >65){
-                gear(low);
-            }
-
-            
-            if (temp_measure(pinHouseTemp) < 18){
-                digitalWrite(8,HIGH);
-            } else{
-                digitalWrite(8,LOW);
-            }
-
-            if (temp_measure(pinHotWaterTemp) < 60){
-                digitalWrite(8,HIGH);
-            } else{
-                digitalWrite(8,LOW);
-            }
-
-            do {
-                for (int counts=0; counts<10; counts++){
-                    average_light+= light_sensor_value;
-                    delay(1000);
-                }
-                average_light/=10;
-            } while(average_light > 50)
-
+        if (boiler_temp < 55){
+            gear(high);
+        } else if (boiler_temp > 55 && boiler_temp < 65){
+            gear(medium);
+        } else if (boiler_temp >65){
+            gear(low);
         }
+
+        
+        if (temp_measure(pinHouseTemp) < 18){
+            digitalWrite(8,HIGH);
+        } else{
+            digitalWrite(8,LOW);
+        }
+
+        if (temp_measure(pinHotWaterTemp) < 60){
+            digitalWrite(8,HIGH);
+        } else{
+            digitalWrite(8,LOW);
+        }
+
+        do {
+            for (int counts=0; counts<10; counts++){
+                average_light+= analogRead(pinFlameLight);
+                delay(1000);
+            }
+            average_light/=10;
+        } while(average_light > 50);
 
     }
 
 }
+
