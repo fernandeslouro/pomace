@@ -24,10 +24,24 @@ Material needed:
  - Arduino board (mega?)
  - wifi module
  - SD card module + SD card
+ - clock module
  - Screen
- - A bunch of relays
+ - A bunch of relays (https://store.arduino.cc/products/arduino-4-relays-shield)
+
+Interrupts
+ - Needed for menus
+ - Needed for motor control/dimmer
 
 Web server should be able to:
  - Show the present state of the boiler
 
 Data Storage would be simpler locally using an SD card
+
+Motor control:
+ - I think I can afford to spare one interrupt pin for the dimmer
+
+
+Resources:
+ - https://mauser.pt/catalog/
+ - https://github.com/marcass/furnace_control
+ - https://www.instructables.com/Arduino-Pellet-Stove-Controller/
