@@ -25,9 +25,22 @@ Material needed:
  - wifi module
  - SD card module + SD card
  - Screen
- - A bunch of relays
+ - A bunch of relays, refer https://www.youtube.com/watch?v=_Zg5DRCHWfk
 
 Web server should be able to:
  - Show the present state of the boiler
+ - Provide controls for motors
 
 Data Storage would be simpler locally using an SD card
+
+
+
+Next Steps:
+ - Program the entire logic of the boiler control
+ - Add a screen and buttons (by this time the boiler can be controlled by the arduino)
+
+
+ Motor control:
+ - I need to control the speed of an AC single-phase motor
+  - Seems like I have to change the
+  - 50 Hz, 220 V, 0.09 kW, 2800 RPM
