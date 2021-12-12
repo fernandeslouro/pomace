@@ -1,7 +1,9 @@
 /*
-#include <Arduino.h>
 #include <RBDdimmer.h>*/
+#include <Arduino.h>
 #include <math.h>
+#include <SD.h>
+#include <SPI.h>
 
 // add necessary constants
 //#define PI 3.14159
@@ -18,9 +20,9 @@ public:
 void gear(gear_values *present_gear)
 {
     dimmer.setPower(present_gear->gear_fan_speed);
-    digitalWrite(7, HIGH); // turn relay ON
+    digitalWrite(mainMotorPin, HIGH); // turn relay ON
     delay(present_gear->motor_working * 1000);
-    digitalWrite(7, LOW); // turn relay OFF
+    digitalWrite(mainMotorPin, LOW); // turn relay OFF
     delay(present_gear->motor_stopped * 1000);
 }
 
@@ -58,16 +60,35 @@ const int pinHouseTemp = A2;
 const int pinWasteGasTemp = A3;
 const int pinFlameLight = A4;
 
-low = GEAR_VALUES(50, 1, 90);
+const int pinCS = 53; //SPI bus on arduino Mega, it's pin 10 on arduino uno
+const int mainMotorPin = 7;
+const int HouseMotorPin = 8;
+
+const string log_filename = "burner_data.csv"
+
+    low = GEAR_VALUES(50, 1, 90);
 medium = GEAR_VALUES(60, 1.5, 70);
 high = GEAR_VALUES(70, 2, 60);
 
 void setup()
 {
+    USE_SERIAL.begin(9600);
+
+    // SD Card Initialization
+    if (SD.begin())
+    {
+        Serial.println("SD card is ready to use.");
+    }
+    else
+    {
+        Serial.println("SD card initialization failed");
+        return;
+    }
 
     // Configures specified pin to work as input ou output
-    pinMode(7, OUTPUT); // connected to S terminal of Relay
-    pinMode(8, OUTPUT);
+    pinMode(mainMotorPin, OUTPUT); // connected to S terminal of Relay
+    pinMode(HouseMotorPin, OUTPUT);
+    pinMode(pinCS, OUTPUT);
 
     int fan_speed;
     bool fire_motor;
@@ -76,7 +97,6 @@ void setup()
     int counts;
     int light_sensor_value;
 
-    USE_SERIAL.begin(9600);
     dimmer.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE)
 
     // blow the fan at max to clean up a bit
@@ -130,26 +150,37 @@ void loop()
 
         if (temp_measure(pinHouseTemp) < 18)
         {
-            digitalWrite(8, HIGH);
+            digitalWrite(HouseMotorPin, HIGH);
         }
         else
         {
-            digitalWrite(8, LOW);
+            digitalWrite(HouseMotorPin, LOW);
         }
 
         if (temp_measure(pinHotWaterTemp) < 60)
         {
-            digitalWrite(8, HIGH);
+            digitalWrite(HouseMotorPin, HIGH);
         }
         else
         {
-            digitalWrite(8, LOW);
+            digitalWrite(HouseMotorPin, LOW);
         }
 
         if (temp_measure(pinWasteGasTemp) > 130)
         {
             // Display message that chimney must be cleaned
         }
+
+        /*
+        Evary minute or something like that, store data:
+         - boiler temperature
+         - waste gas temperature
+         - House temperature
+         - Hot water temperature
+         - Boiler temperature
+         - Light sensor?
+         - 
+        */
 
         do
         {
@@ -160,5 +191,21 @@ void loop()
             }
             average_light /= 10;
         } while (average_light > 50);
+    }
+
+    myFile = SD.open(log_filename, FILE_WRITE);
+    if (myFile)
+    {
+        //myFile.print(rtc.getTimeStr()); (time)
+        myfile.print(",");
+        myfile.println(int(boiler_temp));
+        myfile.print(",");
+        myfile.println(int(house_temp));
+
+        myFile.close();
+    }
+    else
+    {
+        Serial.println("error opening file");
     }
 }
