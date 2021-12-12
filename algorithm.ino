@@ -1,5 +1,7 @@
-/*#include <Arduino.h>
+/*
+#include <Arduino.h>
 #include <RBDdimmer.h>*/
+#include <math.h>
 
 // add necessary constants
 //#define PI 3.14159
@@ -15,8 +17,8 @@ public:
 
 void gear(gear_values *present_gear)
 {
-    dimmer.setPower(present_gear->gear_fan_speed)
-        digitalWrite(7, HIGH); // turn relay ON
+    dimmer.setPower(present_gear->gear_fan_speed);
+    digitalWrite(7, HIGH); // turn relay ON
     delay(present_gear->motor_working * 1000);
     digitalWrite(7, LOW); // turn relay OFF
     delay(present_gear->motor_stopped * 1000);

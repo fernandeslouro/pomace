@@ -43,5 +43,6 @@ Motor control:
 
 Resources:
  - https://mauser.pt/catalog/
+ - https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
  - https://github.com/marcass/furnace_control
  - https://www.instructables.com/Arduino-Pellet-Stove-Controller/
