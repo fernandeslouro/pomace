@@ -2,36 +2,48 @@
 
 Building a custom controller board for our family's pomace boiler. 
 
-What the board will need to control:
- - motor to get pomace into the fire (relay, according to light sensor and thermometer) - pin 7
- - fan motor which blows air into the flame (speed controlled, according to light sensor and thermometer)
- - motors bring water from the house (relay, controlled by termometer and requests in the house) - pin 8
- - motor to bring pomace into pyramidal storage (relay, according to a light/fullness sensor to be installed)
- - motor to crunch pomace and bring it to the larger storage (user-actioned, but must add a protection against stalling)
- - heat gun turn on/off (maybe)
- - Will need a clock as well
 
-Sensors the board will have to process:
- - Water temperature (AO)
- - Temperature of the waters going through the house (sanitary hot water) (A1)
+
+
+
+
+
+
+
+
+
+
+
  - Temperature insde the house (A2)
  - Waste gas temperature (A3)
  - Flame light (A4)
  - Fullness of pyramid storage 
  - Stalling of the motors (especially the pomace breaker)
 
-Material needed:
- - Arduino board (mega?)
- - wifi module
- - SD card module + SD card
- - clock module
- - Screen
- - A bunch of relays (https://store.arduino.cc/products/arduino-4-relays-shield)
+Components Required:
+ - Arduino Mega https://mauser.pt/catalog/product_info.php?cPath=1667_2889_2891_2888&products_id=096-6804 [BOUGHT]
+ - Wifi Module https://mauser.pt/catalog/product_info.php?cPath=1667_2604_2607&products_id=096-6331 [BOUGHT]
+ - 4 Line LCD https://mauser.pt/catalog/product_info.php?cPath=1667_2604_2609&products_id=017-1147 [BOUGHT]
+ - Clock Module https://mauser.pt/catalog/product_info.php?cPath=1667_2604_2793&products_id=096-6595 [BOUGHT]
+ - Relays Shield https://mauser.pt/catalog/product_info.php?cPath=324_517_2118&products_id=096-8204 [BOUGHT]
+ - Battery for clock module [BOUGHT]
+ - 12V Power Supply for relay module [BOUGHT]
+ - I²C Module for Screen https://mauser.pt/catalog/product_info.php?cPath=1667_2604_2609&products_id=096-8614 [BOUGHT]
+ - Male-Female, Male-Male, Female-Female jumper cables https://mauser.pt/catalog/product_info.php?cPath=1874_56_2732_2787&products_id=096-7938 [BOUGHT]
+ - fio normal de arame [BOUGHT]
+ - 4 Additional Temperature sensors https://mauser.pt/catalog/product_info.php?cPath=1667_2669_2676&products_id=096-8756 [BOUGHT]
+ - 4 4.7 Ohm resistors to use with temperatrure sensor https://mauser.pt/catalog/product_info.php?cPath=324_526_530&products_id=104-7594 [BOUGHT]
+ - 10K Ohm, 100K Ohm resistors [BOUGHT]
+ - Buttons of some sort [BOUGHT]
+ - Flame sensor  [BOUGHT, need a more heavy duty one]
+ - SD Card Module and SD Card
+ - Dimmer module
+
+
 
 Interrupts
  - Needed for menus
  - Needed for motor control/dimmer
- - A bunch of relays, refer 
 
 Web server should be able to:
  - Show the present state of the boiler
@@ -51,8 +63,10 @@ Next Steps:
  - Add a screen and buttons (by this time the boiler can be controlled by the arduino)
 
 Resources:
+ - How to connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
+ - How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
+ - How to setup the light detector (just a photoresistor): https://create.arduino.cc/projecthub/ccPegasus/photoresistor-brightness-sensor-db3110
  - https://mauser.pt/catalog/
- - https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
  - https://github.com/marcass/furnace_control
  - https://www.instructables.com/Arduino-Pellet-Stove-Controller/
  - https://www.youtube.com/watch?v=_Zg5DRCHWfk

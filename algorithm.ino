@@ -1,211 +1,164 @@
-/*
-#include <RBDdimmer.h>*/
-#include <Arduino.h>
-#include <math.h>
-#include <SD.h>
-#include <SPI.h>
+#include "RTClib.h"
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
-// add necessary constants
-//#define PI 3.14159
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
-class gear_values
-{
-public:
-    GEAR_VALUES(int gear_fan_speed, int motor_working, int motor_stopped);
-    int gear_fan_speed;
-    int motor_working;
-    int motor_stopped;
-};
+#define ONE_WIRE_BUS 2               // Data wire is plugged into port 2 on the Arduino
+OneWire oneWire(ONE_WIRE_BUS);       // Setup a oneWire instance to communicate with any OneWire devices
+DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature.
+int deviceCount = 0;
+float tempC, boiler_temp;
+bool thermostat = true;
 
-void gear(gear_values *present_gear)
-{
-    dimmer.setPower(present_gear->gear_fan_speed);
-    digitalWrite(mainMotorPin, HIGH); // turn relay ON
-    delay(present_gear->motor_working * 1000);
-    digitalWrite(mainMotorPin, LOW); // turn relay OFF
-    delay(present_gear->motor_stopped * 1000);
-}
+RTC_DS1307 rtc;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
-double temp_measure(int pin)
-{
+int buttonState = 0;      // variable for reading the pushbutton status
+const int buttonPin = 13; // the number of the LED pin
 
-    const double beta = 3600.0;
-    const double r0 = 10000.0;
-    const double t0 = 273.0 + 25.0;
-    const double rx = r0 * exp(-beta / t0);
+int flameSensorPin = A0;  // select the input pin for LDR
+int flameSensorValue = 0; // variable to store the value coming from the sensor
 
-    // Circuit parameters
-    const double vcc = 5.0;
-    const double R = 20000.0;
+const int pinBurnerFeeder = 3;
+const int pinHotWaterPump = 4;
+const int pinCentralHeatingPump = 5;
+const int pinStorageFeeder = 5;
+int loopDelay = 1500;
 
-    // Number of read ramples
-    const int nSamples = 5;
+// Relays to control
+// Burner Feeder
+// Hot Water pump
+// Central Heating Pump
+// Storage Feeder
+// (Temporary) Ventilator
+// (Future) Auxiliary Cleaning Fan
+// (Future) Resistor to start flame
 
-    int sum = 0;
-    for (int i = 0; i < nSamples; i++)
-    {
-        sum += analogRead(pin);
-        delay(10);
-    }
-
-    double v = (vcc * sum) / (nSamples * 1024.0);
-    double rt = (vcc * R) / v - R;
-
-    return beta / log(rt / rx);
-}
-
-const int pinBoilerTemp = A0;
-const int pinHotWaterTemp = A1;
-const int pinHouseTemp = A2;
-const int pinWasteGasTemp = A3;
-const int pinFlameLight = A4;
-
-const int pinCS = 53; //SPI bus on arduino Mega, it's pin 10 on arduino uno
-const int mainMotorPin = 7;
-const int HouseMotorPin = 8;
-
-const string log_filename = "burner_data.csv"
-
-    low = GEAR_VALUES(50, 1, 90);
-medium = GEAR_VALUES(60, 1.5, 70);
-high = GEAR_VALUES(70, 2, 60);
+// Temperature Sensors
+// Boiler Temperature
+// Hot Water temperature
+// Waste Gas Temperature
 
 void setup()
 {
-    USE_SERIAL.begin(9600);
+  Serial.begin(9600); // initialize serial monitor with 9600 baud
 
-    // SD Card Initialization
-    if (SD.begin())
-    {
-        Serial.println("SD card is ready to use.");
-    }
-    else
-    {
-        Serial.println("SD card initialization failed");
-        return;
-    }
+  pinMode(buttonPin, INPUT);
 
-    // Configures specified pin to work as input ou output
-    pinMode(mainMotorPin, OUTPUT); // connected to S terminal of Relay
-    pinMode(HouseMotorPin, OUTPUT);
-    pinMode(pinCS, OUTPUT);
+  sensors.begin(); // Start up the library
+  // locate devices on the bus
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  deviceCount = sensors.getDeviceCount();
+  Serial.print(deviceCount, DEC);
+  Serial.println(" devices.");
+  Serial.println("");
 
-    int fan_speed;
-    bool fire_motor;
-    int average_light = 0;
-    int ligt_sensor_value;
-    int counts;
-    int light_sensor_value;
+  /*
+  lcd.begin();
+  // Turn on the blacklight and print a message.
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Hello, world!");
+  */
 
-    dimmer.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE)
+  Serial.print("Loading Clock... ");
+  rtc.begin();
+  Serial.println("Done");
 
-    // blow the fan at max to clean up a bit
-    dimmer.setPower(100);
-    delay(10000);
-    dimmer.setPower(40);
+  Serial.print("Loading Relays... ");
+  pinMode(pinBurnerFeeder, OUTPUT);
+  pinMode(pinHotWaterPump, OUTPUT);
+  pinMode(pinCentralHeatingPump, OUTPUT);
+  pinMode(pinStorageFeeder, OUTPUT);
+  digitalWrite(pinBurnerFeeder, HIGH);
+  digitalWrite(pinHotWaterPump, HIGH);
+  digitalWrite(pinCentralHeatingPump, HIGH);
+  digitalWrite(pinStorageFeeder, HIGH);
+  Serial.println("Done");
 
-    // check if light is on
-    while (average_light < 50)
-    {
-        for (int counts = 0; counts < 10; counts++)
-        {
-            average_light += analogRead(pinFlameLight);
-            delay(1000);
-        }
-        average_light /= 10;
-    }
+  checkflame(flameSensorPin, true, 800, 10, 1000);
 }
 
 void loop()
 {
+  /*
+  if (digitalRead(buttonPin) == HIGH)
+  {
+    Serial.println("ON");
+  }
+  else
+  {
+    Serial.println("OFF");
+  }
+*/
 
-    //check temperature of boiler every 10 seconds, and chage mode appropriately
-    int boiler_temp;
-    int boiler_speed;
-    int house_temp;
-    bool ac_pump;
+  Serial.println(digitalRead(buttonPin) == HIGH ? "ON" : "OFF");
 
-    /*
-    gear_values *low;
-    gear_values *medium;
-    gear_values *high;
-    */
+  // Send command to all the sensors for temperature conversion
+  sensors.requestTemperatures();
+  flameSensorValue = analogRead(flameSensorPin); // read the value from the sensor
+  Serial.print("Light sensor value is ");
+  Serial.println(flameSensorValue); //prints the values coming from the sensor on the screen
 
-    while (true)
-    {
-        boiler_temp = temp_measure(pinBoilerTemp);
+  delay(100);
 
-        if (boiler_temp < 55)
-        {
-            gear(high);
-        }
-        else if (boiler_temp > 55 && boiler_temp < 65)
-        {
-            gear(medium);
-        }
-        else if (boiler_temp > 65)
-        {
-            gear(low);
-        }
+  // Display temperature from each sensor
+  for (int i = 0; i < deviceCount; i++)
+  {
+    tempC = sensors.getTempCByIndex(i);
+    Serial.print("Sensor ");
+    Serial.print(i + 1);
+    Serial.print(": ");
+    Serial.print(tempC);
+    Serial.println("C");
+    delay(500);
+  }
+  Serial.println("");
 
-        if (temp_measure(pinHouseTemp) < 18)
-        {
-            digitalWrite(HouseMotorPin, HIGH);
-        }
-        else
-        {
-            digitalWrite(HouseMotorPin, LOW);
-        }
+  boiler_temp = sensors.getTempCByIndex(0);
 
-        if (temp_measure(pinHotWaterTemp) < 60)
-        {
-            digitalWrite(HouseMotorPin, HIGH);
-        }
-        else
-        {
-            digitalWrite(HouseMotorPin, LOW);
-        }
+  if (boiler_temp < 55)
+  {
+    gear(pinBurnerFeeder, 5000, 30000);
+  }
+  else if (boiler_temp > 55 && boiler_temp < 65)
+  {
+    gear(pinBurnerFeeder, 5000, 30000);
+  }
+  else if (boiler_temp > 65)
+  {
+    gear(pinBurnerFeeder, 5000, 30000);
+  }
 
-        if (temp_measure(pinWasteGasTemp) > 130)
-        {
-            // Display message that chimney must be cleaned
-        }
+  if (thermostat)
+  {
+    digitalWrite(pinCentralHeatingPump, LOW);
+  }
+  else
+  {
+    digitalWrite(pinCentralHeatingPump, HIGH);
+  }
+  
+  thermostat ? digitalWrite(pinCentralHeatingPump, LOW) : digitalWrite(pinCentralHeatingPump, HIGH);
 
-        /*
-        Evary minute or something like that, store data:
-         - boiler temperature
-         - waste gas temperature
-         - House temperature
-         - Hot water temperature
-         - Boiler temperature
-         - Light sensor?
-         - 
-        */
+  if (sensors.getTempCByIndex(1) < 60)
+  {
+    digitalWrite(pinHotWaterPump, LOW);
+  }
+  else
+  {
+    digitalWrite(pinHotWaterPump, HIGH);
+  }
 
-        do
-        {
-            for (int counts = 0; counts < 10; counts++)
-            {
-                average_light += analogRead(pinFlameLight);
-                delay(1000);
-            }
-            average_light /= 10;
-        } while (average_light > 50);
-    }
+  if (sensors.getTempCByIndex(2) > 130)
+  {
+    // Display message that chimney must be cleaned
+  }
 
-    myFile = SD.open(log_filename, FILE_WRITE);
-    if (myFile)
-    {
-        //myFile.print(rtc.getTimeStr()); (time)
-        myfile.print(",");
-        myfile.println(int(boiler_temp));
-        myfile.print(",");
-        myfile.println(int(house_temp));
-
-        myFile.close();
-    }
-    else
-    {
-        Serial.println("error opening file");
-    }
+  checkflame(flameSensorPin, true, 800, 5, 200);
 }
