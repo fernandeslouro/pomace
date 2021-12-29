@@ -29,6 +29,20 @@ const int pinCentralHeatingPump = 5;
 const int pinStorageFeeder = 5;
 int loopDelay = 1500;
 
+int motor_running = HIGH; // initial state of LED
+long rememberTime = 0;    // this is used by the code
+
+long int onDuration;
+long int offDuration;
+
+unsigned long previousMillis = 0;
+const int INTERVAL_MILLIS = 1000;
+unsigned int sampleCount = 0;
+unsigned int total = 0;
+const byte SAMPLE_SIZE = 10;
+
+bool chimney_needs_clean;
+
 // Relays to control
 // Burner Feeder
 // Hot Water pump
@@ -86,79 +100,65 @@ void setup()
 
 void loop()
 {
-  /*
-  if (digitalRead(buttonPin) == HIGH)
-  {
-    Serial.println("ON");
-  }
-  else
-  {
-    Serial.println("OFF");
-  }
-*/
-
   Serial.println(digitalRead(buttonPin) == HIGH ? "ON" : "OFF");
 
   // Send command to all the sensors for temperature conversion
   sensors.requestTemperatures();
-  flameSensorValue = analogRead(flameSensorPin); // read the value from the sensor
-  Serial.print("Light sensor value is ");
   Serial.println(flameSensorValue); //prints the values coming from the sensor on the screen
-
-  delay(100);
-
-  // Display temperature from each sensor
-  for (int i = 0; i < deviceCount; i++)
-  {
-    tempC = sensors.getTempCByIndex(i);
-    Serial.print("Sensor ");
-    Serial.print(i + 1);
-    Serial.print(": ");
-    Serial.print(tempC);
-    Serial.println("C");
-    delay(500);
-  }
-  Serial.println("");
 
   boiler_temp = sensors.getTempCByIndex(0);
 
   if (boiler_temp < 55)
   {
-    gear(pinBurnerFeeder, 5000, 30000);
+    onDuration = 1000;
+    offDuration = 30000;
   }
   else if (boiler_temp > 55 && boiler_temp < 65)
   {
-    gear(pinBurnerFeeder, 5000, 30000);
+    onDuration = 1000;
+    offDuration = 60000;
   }
   else if (boiler_temp > 65)
   {
-    gear(pinBurnerFeeder, 5000, 30000);
+    onDuration = 1000;
+    offDuration = 90000;
   }
 
-  if (thermostat)
+  if (motor_running == LOW)
   {
-    digitalWrite(pinCentralHeatingPump, LOW);
+    if ((millis() - rememberTime) >= onDuration)
+    {
+      motor_running = LOW;     // change the state of LED
+      rememberTime = millis(); // remember Current millis() time
+    }
   }
   else
   {
-    digitalWrite(pinCentralHeatingPump, HIGH);
+    if ((millis() - rememberTime) >= offDuration)
+    {
+      motor_running = HIGH;    // change the state of LED
+      rememberTime = millis(); // remember Current millis() time
+    }
   }
-  
+
+  digitalWrite(pinBurnerFeeder, motor_running);
+
   thermostat ? digitalWrite(pinCentralHeatingPump, LOW) : digitalWrite(pinCentralHeatingPump, HIGH);
+  sensors.getTempCByIndex(1) < 60 ? digitalWrite(pinHotWaterPump, LOW) : digitalWrite(pinHotWaterPump, HIGH);
+  chimney_needs_clean = sensors.getTempCByIndex(2) > 130 ? true : false;
 
-  if (sensors.getTempCByIndex(1) < 60)
+  if (millis() - previousMillis >= INTERVAL_MILLIS)
   {
-    digitalWrite(pinHotWaterPump, LOW);
-  }
-  else
-  {
-    digitalWrite(pinHotWaterPump, HIGH);
-  }
-
-  if (sensors.getTempCByIndex(2) > 130)
-  {
-    // Display message that chimney must be cleaned
+    previousMillis = millis();
+    total = total + analogRead(flameSensorPin);
   }
 
-  checkflame(flameSensorPin, true, 800, 5, 200);
+  if (sampleCount == SAMPLE_SIZE)
+  {
+    Serial.print(total / sampleCount);
+
+    // reset for the next group
+    sampleCount = 0;
+    total = 0;
+  }
 }

@@ -94,3 +94,20 @@ if (relays)
   }
 
   */
+
+
+/*
+  // Display temperature from each sensor
+  for (int i = 0; i < deviceCount; i++)
+  {
+    tempC = sensors.getTempCByIndex(i);
+    Serial.print("Sensor ");
+    Serial.print(i + 1);
+    Serial.print(": ");
+    Serial.print(tempC);
+    Serial.println("C");
+    delay(500);
+  }
+  Serial.println("");
+  */
+
