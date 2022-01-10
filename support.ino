@@ -1,21 +1,21 @@
 void printdate(DateTime now)
 {
-    Serial.print(now.year(), DEC);
-    Serial.print('/');
-    Serial.print(now.month(), DEC);
-    Serial.print('/');
-    Serial.print(now.day(), DEC);
-    Serial.print(" (");
-    Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
-    Serial.print(") ");
-    Serial.print(now.hour(), DEC);
-    Serial.print(':');
-    Serial.print(now.minute(), DEC);
-    Serial.print(':');
-    Serial.print(now.second(), DEC);
-    Serial.println();
+  Serial.print(now.year(), DEC);
+  Serial.print('/');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  Serial.print(now.day(), DEC);
+  Serial.print(" (");
+  Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
+  Serial.print(") ");
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  Serial.print(now.second(), DEC);
+  Serial.println();
 
-    /*
+  /*
   Serial.print(" since midnight 1/1/1970 = ");
   Serial.print(now.unixtime());
   Serial.print("s = ");
@@ -24,77 +24,110 @@ void printdate(DateTime now)
   */
 }
 
-void gear(int mainMotorPin, int motor_working_time, int motor_stopped_time)
+
+void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_counts)
 {
-    //dimmer.setPower(present_gear->gear_fan_speed);
-    digitalWrite(mainMotorPin, LOW); // turn relay ON
-    delay(motor_working_time);
-    digitalWrite(mainMotorPin, HIGH); // turn relay OFF
-    delay(motor_stopped_time);
-}
+  int average_light = 0;
+  Serial.println("Checking Ignition... ");
 
-void checkflame(int flamepin, bool already_running, int flame_min_light, int counts, int delay_btw_counts)
-{
-
-    int average_light = 0;
-    Serial.println("Checking Ignition... ");
-
-    if (already_running)
-    {
-        while (average_light < flame_min_light)
-        {
-            for (int counts = 0; counts < 20; counts++)
-            {
-                average_light += analogRead(flamepin);
-                delay(delay_btw_counts);
-            }
-            average_light /= 10;
-        }
-    }
-    else
-    {
-        do
-        {
-            for (int counts = 0; counts < 10; counts++)
-            {
-                average_light += analogRead(flameSensorPin);
-                delay(delay_btw_counts);
-            }
-            average_light /= counts;
-        } while (average_light > flame_min_light);
-    }
-    //Serial.println("Done");
-}
-
-/*
-if (relays)
+  while (average_light < flame_min_light)
   {
-    for (int i = 0; i < NUMPINS; i++)
+    for (int counts = 0; counts < 20; counts++)
     {
-      if (relays)
-        digitalWrite(controlPin[i], LOW);
-      Serial.print("Channel: ");
-      Serial.print(i);
-      Serial.print(" ON - ");
-      printdate(rtc.now());
-      delay(loopDelay);
+      average_light += analogRead(flamepin);
+      delay(delay_btw_counts);
     }
-    Serial.println("=====");
-    for (int i = 0; i < NUMPINS; i++)
-    {
-      if (relays)
-        digitalWrite(controlPin[i], HIGH);
-      Serial.print("Channel: ");
-      Serial.print(i);
-      Serial.print(" OFF - ");
-      printdate(rtc.now());
-      delay(loopDelay);
-    }
-    Serial.println("===============");
+    average_light /= 10;
+  }
+  flameOn = true;
+  //Serial.println("Done");
+}
+
+void update_lcd()
+{
+  if (millis() - screenPreviousMillis >= SCREEN_INTERVAL_MILLIS)
+  {
+    screenPreviousMillis = millis();
+    lcd.setCursor(0, 0);
+    lcd.print("B:");
+    lcd.print(boiler_temp);
+    lcd.setCursor(8, 0);
+    lcd.print("HW:");
+    lcd.print(hot_water_temp);
+    lcd.setCursor(0, 1);
+    lcd.print("L:");
+    lcd.print(analogRead(pinFlameSensor));
+    lcd.setCursor(0, 2);
+    lcd.print("M:");
+    lcd.print(onDuration);
+    lcd.print(" ");
+    lcd.print(offDuration);
+    lcd.print(" ");
+    lcd.print(motor_running);
+    lcd.setCursor(0, 3);
+    lcd.print("T:");
+    lcd.print(thermostat);
+    lcd.setCursor(4, 3);
+    lcd.print("Bt:");
+    lcd.print(buttonState);
+    lcd.setCursor(9, 3);
+    lcd.print("Fl:");
+    lcd.print(flameOn);
+  }
+}
+
+
+void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned long *offDuration)
+{
+  if (boiler_temperature < 55)
+  {
+    *onDuration = 2000;
+    *offDuration = 30000;
+  }
+  else if (boiler_temperature > 55 && boiler_temperature < 65)
+  {
+    *onDuration = 1000;
+    *offDuration = 60000;
+  }
+  else if (boiler_temperature > 65)
+  {
+    *onDuration = 1000;
+    *offDuration = 90000;
+  }
+}
+
+void flame_counts()
+{
+  if (millis() - flameSensorPreviousMillis >= FLAME_INTERVAL_MILLIS)
+  {
+    flameSensorPreviousMillis = millis();
+    flameSum += analogRead(pinFlameSensor);
+    flameCounts++;
   }
 
-  */
+  if (flameCounts == FLAME_SENSOR_SAMPLES)
+  {
+    flameOn = flameSum / flameCounts < 500 ? true : false;
+    flameCounts = 0;
+    flameSum = 0;
+  }
+}
 
+void loopcount()
+{
+  loop_counter++;
+  if (loop_counter % show_time_counter_every == 0)
+  {
+    Serial.println(loop_counter);
+    time_shown_counter++;
+    loop_timer_previous_millis = loop_timer_now;
+    loop_timer_now = millis();
+    //loop_counter = 0;
+    loop_time = (loop_timer_now - loop_timer_previous_millis) / (time_shown_counter * show_time_counter_every);
+    Serial.print("Average loop time is ");
+    Serial.println(loop_time);
+  }
+}
 
 /*
   // Display temperature from each sensor
@@ -109,5 +142,4 @@ if (relays)
     delay(500);
   }
   Serial.println("");
-  */
-
+*/

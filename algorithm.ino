@@ -5,62 +5,64 @@
 #include <DallasTemperature.h>
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
-LiquidCrystal_I2C lcd(0x27, 20, 4);
-
-#define ONE_WIRE_BUS 2               // Data wire is plugged into port 2 on the Arduino
-OneWire oneWire(ONE_WIRE_BUS);       // Setup a oneWire instance to communicate with any OneWire devices
-DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature.
-int deviceCount = 0;
-float tempC, boiler_temp;
-bool thermostat = true;
-
-RTC_DS1307 rtc;
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-
-int buttonState = 0;      // variable for reading the pushbutton status
-const int buttonPin = 13; // the number of the LED pin
-
-int flameSensorPin = A0;  // select the input pin for LDR
-int flameSensorValue = 0; // variable to store the value coming from the sensor
+LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 16 chars and 2 line display
+int screenPreviousMillis;
+const int SCREEN_INTERVAL_MILLIS = 1000;
 
 const int pinBurnerFeeder = 3;
 const int pinHotWaterPump = 4;
+const int pinFlameSensor = A0;
+const int buttonPin = 13;
 const int pinCentralHeatingPump = 5;
 const int pinStorageFeeder = 5;
-int loopDelay = 1500;
+const int pinOneWireTempSensors = 2;
+bool relays = false;
 
+// Temperature Sensors
+OneWire oneWire(pinOneWireTempSensors); // Setup a oneWire instance to communicate with any OneWire devices
+DallasTemperature sensors(&oneWire);    // Pass our oneWire reference to Dallas Temperature.
+int deviceCount = 0;
+float tempC, boiler_temp, hot_water_temp, waste_gas_temp;
+bool thermostat = true;
+
+// Real-Time Clock
+RTC_DS1307 rtc;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+// Button
+int buttonState = 0;
+
+// Flame Sensor
+int flameSensorValue = 0; // variable to store the value coming from the sensor
+unsigned long flameSensorPreviousMillis = 0;
+const int FLAME_INTERVAL_MILLIS = 1000;
+unsigned int flameCounts = 0;
+unsigned int flameSum = 0;
+const byte FLAME_SENSOR_SAMPLES = 10;
+bool flameOn;
 int motor_running = HIGH; // initial state of LED
 long rememberTime = 0;    // this is used by the code
 
-long int onDuration;
-long int offDuration;
-
-unsigned long previousMillis = 0;
-const int INTERVAL_MILLIS = 1000;
-unsigned int sampleCount = 0;
-unsigned int total = 0;
-const byte SAMPLE_SIZE = 10;
-
+// Other
+unsigned long onDuration;
+unsigned long offDuration;
 bool chimney_needs_clean;
 
-// Relays to control
-// Burner Feeder
-// Hot Water pump
-// Central Heating Pump
-// Storage Feeder
-// (Temporary) Ventilator
-// (Future) Auxiliary Cleaning Fan
-// (Future) Resistor to start flame
-
-// Temperature Sensors
-// Boiler Temperature
-// Hot Water temperature
-// Waste Gas Temperature
+// Count cycle time
+int loop_counter;                   //holds the count for every loop pass
+int time_shown_counter;             //holds the count for every loop pass
+long loop_timer_now;                //holds the current millis
+long loop_timer_previous_millis;    //holds the previous millis
+float loop_time;                    //holds difference (loop_timer_now - previous_millis) = total execution time
+long show_time_counter_every = 100; //Show average time every x loops
 
 void setup()
 {
-  Serial.begin(9600); // initialize serial monitor with 9600 baud
+  Serial.begin(9600);
 
+  lcd.begin(); // initialize the lcd
+  // Print a message to the LCD.
+  lcd.backlight();
   pinMode(buttonPin, INPUT);
 
   sensors.begin(); // Start up the library
@@ -71,14 +73,6 @@ void setup()
   Serial.print(deviceCount, DEC);
   Serial.println(" devices.");
   Serial.println("");
-
-  /*
-  lcd.begin();
-  // Turn on the blacklight and print a message.
-  lcd.backlight();
-  lcd.setCursor(0, 0);
-  lcd.print("Hello, world!");
-  */
 
   Serial.print("Loading Clock... ");
   rtc.begin();
@@ -95,70 +89,50 @@ void setup()
   digitalWrite(pinStorageFeeder, HIGH);
   Serial.println("Done");
 
-  checkflame(flameSensorPin, true, 800, 10, 1000);
+  //checkflame(pinFlameSensor, 800, 3, 1000);
+  Serial.println("Starting Loop");
 }
 
 void loop()
 {
-  Serial.println(digitalRead(buttonPin) == HIGH ? "ON" : "OFF");
+  //Serial.println(digitalRead(buttonPin) == HIGH ? "ON" : "OFF");
+  buttonState = digitalRead(buttonPin);
 
-  // Send command to all the sensors for temperature conversion
-  sensors.requestTemperatures();
-  Serial.println(flameSensorValue); //prints the values coming from the sensor on the screen
+  sensors.requestTemperatures(); // Send command to all the sensors for temperature conversion
 
   boiler_temp = sensors.getTempCByIndex(0);
+  hot_water_temp = sensors.getTempCByIndex(1);
+  waste_gas_temp = sensors.getTempCByIndex(2);
 
-  if (boiler_temp < 55)
-  {
-    onDuration = 1000;
-    offDuration = 30000;
-  }
-  else if (boiler_temp > 55 && boiler_temp < 65)
-  {
-    onDuration = 1000;
-    offDuration = 60000;
-  }
-  else if (boiler_temp > 65)
-  {
-    onDuration = 1000;
-    offDuration = 90000;
-  }
+  motor_control(boiler_temp, &onDuration, &offDuration);
 
   if (motor_running == LOW)
   {
     if ((millis() - rememberTime) >= onDuration)
     {
-      motor_running = LOW;     // change the state of LED
-      rememberTime = millis(); // remember Current millis() time
+      motor_running = HIGH;
+      rememberTime = millis();
     }
   }
   else
   {
     if ((millis() - rememberTime) >= offDuration)
     {
-      motor_running = HIGH;    // change the state of LED
-      rememberTime = millis(); // remember Current millis() time
+      motor_running = LOW;
+      rememberTime = millis();
     }
   }
-
-  digitalWrite(pinBurnerFeeder, motor_running);
-
-  thermostat ? digitalWrite(pinCentralHeatingPump, LOW) : digitalWrite(pinCentralHeatingPump, HIGH);
-  sensors.getTempCByIndex(1) < 60 ? digitalWrite(pinHotWaterPump, LOW) : digitalWrite(pinHotWaterPump, HIGH);
-  chimney_needs_clean = sensors.getTempCByIndex(2) > 130 ? true : false;
-
-  if (millis() - previousMillis >= INTERVAL_MILLIS)
+  if (relays)
   {
-    previousMillis = millis();
-    total = total + analogRead(flameSensorPin);
+    digitalWrite(pinBurnerFeeder, motor_running);
+    thermostat ? digitalWrite(pinCentralHeatingPump, LOW) : digitalWrite(pinCentralHeatingPump, HIGH);
+    hot_water_temp < 60 ? digitalWrite(pinHotWaterPump, LOW) : digitalWrite(pinHotWaterPump, HIGH);
   }
 
-  if (sampleCount == SAMPLE_SIZE)
-  {
-    Serial.print(total / sampleCount);
+  chimney_needs_clean = waste_gas_temp > 130 ? true : false;
 
-    // reset for the next group
-    sampleCount = 0;
-    total = 0;
-  }
+  update_lcd();
+
+  flame_counts();
+  loopcount();
 }
