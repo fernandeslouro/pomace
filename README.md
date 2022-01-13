@@ -12,13 +12,14 @@ What the board will need to control:
  - Will need a clock as well
 
 Sensors the board will have to process:
- - Water temperature
+ - Boiler temperature
  - Temperature of the waters going through the house (sanitary hot water)
- - Temperature insde the house
+ - Temperature inside the house *really a binary value provided by a thermostat inside the house)
  - Waste gas temperature
  - Flame light
- - Fullness of pyramid storage 
- - Stalling of the motors (especially the pomace breaker)
+ - In the future:
+    - Fullness of pyramid storage 
+    - Stalling of the motors (especially the pomace breaker)
 
 Components Required:
  - Arduino Mega [BOUGHT]
@@ -64,9 +65,6 @@ Data Storage:
  - I need to control the speed of an AC single-phase motor
  - 50 Hz, 220 V, 0.09 kW, 2800 RPM
 
-Next Steps:
- - Program the entire logic of the boiler control
- - Add a screen and buttons (by this time the boiler can be controlled by the arduino)
 
 Resources:
  - How to connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino

@@ -24,7 +24,6 @@ void printdate(DateTime now)
   */
 }
 
-
 void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_counts)
 {
   int average_light = 0;
@@ -43,39 +42,6 @@ void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_cou
   //Serial.println("Done");
 }
 
-void update_lcd()
-{
-  if (millis() - screenPreviousMillis >= SCREEN_INTERVAL_MILLIS)
-  {
-    screenPreviousMillis = millis();
-    lcd.setCursor(0, 0);
-    lcd.print("B:");
-    lcd.print(boiler_temp);
-    lcd.setCursor(8, 0);
-    lcd.print("HW:");
-    lcd.print(hot_water_temp);
-    lcd.setCursor(0, 1);
-    lcd.print("L:");
-    lcd.print(analogRead(pinFlameSensor));
-    lcd.setCursor(0, 2);
-    lcd.print("M:");
-    lcd.print(onDuration);
-    lcd.print(" ");
-    lcd.print(offDuration);
-    lcd.print(" ");
-    lcd.print(motor_running);
-    lcd.setCursor(0, 3);
-    lcd.print("T:");
-    lcd.print(thermostat);
-    lcd.setCursor(4, 3);
-    lcd.print("Bt:");
-    lcd.print(buttonState);
-    lcd.setCursor(9, 3);
-    lcd.print("Fl:");
-    lcd.print(flameOn);
-  }
-}
-
 
 void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned long *offDuration)
 {
@@ -83,16 +49,19 @@ void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned l
   {
     *onDuration = 2000;
     *offDuration = 30000;
+    dimmer.setPower(30);
   }
   else if (boiler_temperature > 55 && boiler_temperature < 65)
   {
     *onDuration = 1000;
     *offDuration = 60000;
+    dimmer.setPower(20);
   }
   else if (boiler_temperature > 65)
   {
     *onDuration = 1000;
     *offDuration = 90000;
+    dimmer.setPower(10);
   }
 }
 

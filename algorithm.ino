@@ -3,19 +3,24 @@
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <RBDdimmer.h>
+
+#define outputPin 3
+dimmerLamp dimmer(outputPin); //initialase port for dimmer for MEGA, Leonardo, UNO, Arduino M0, Arduino Zero 
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 16 chars and 2 line display
 int screenPreviousMillis;
 const int SCREEN_INTERVAL_MILLIS = 1000;
 
-const int pinBurnerFeeder = 3;
-const int pinHotWaterPump = 4;
+const int pinBurnerFeeder = 8;
+const int pinHotWaterPump = 9;
+const int pinCentralHeatingPump = 10;
+const int pinStorageFeeder = 11;
+
 const int pinFlameSensor = A0;
 const int buttonPin = 13;
-const int pinCentralHeatingPump = 5;
-const int pinStorageFeeder = 5;
-const int pinOneWireTempSensors = 2;
+const int pinOneWireTempSensors = 7;
 bool relays = false;
 
 // Temperature Sensors
@@ -56,13 +61,48 @@ long loop_timer_previous_millis;    //holds the previous millis
 float loop_time;                    //holds difference (loop_timer_now - previous_millis) = total execution time
 long show_time_counter_every = 100; //Show average time every x loops
 
+void update_lcd()
+{
+  if (millis() - screenPreviousMillis >= SCREEN_INTERVAL_MILLIS)
+  {
+    screenPreviousMillis = millis();
+    lcd.setCursor(0, 0);
+    lcd.print("B:");
+    lcd.print(boiler_temp);
+    lcd.setCursor(8, 0);
+    lcd.print("HW:");
+    lcd.print(hot_water_temp);
+    lcd.setCursor(0, 1);
+    lcd.print("L:");
+    lcd.print(analogRead(pinFlameSensor));
+    lcd.setCursor(0, 2);
+    lcd.print("M:");
+    lcd.print(onDuration);
+    lcd.print(" ");
+    lcd.print(offDuration);
+    lcd.print(" ");
+    lcd.print(motor_running);
+    lcd.setCursor(0, 3);
+    lcd.print("T:");
+    lcd.print(thermostat);
+    lcd.setCursor(4, 3);
+    lcd.print("Bt:");
+    lcd.print(buttonState);
+    lcd.setCursor(9, 3);
+    lcd.print("Fl:");
+    lcd.print(flameOn);
+  }
+}
+
 void setup()
 {
   Serial.begin(9600);
 
-  lcd.begin(); // initialize the lcd
-  // Print a message to the LCD.
+  dimmer.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE)
+
+  lcd.init(); // initialize the lcd
   lcd.backlight();
+  
   pinMode(buttonPin, INPUT);
 
   sensors.begin(); // Start up the library
@@ -90,12 +130,10 @@ void setup()
   Serial.println("Done");
 
   //checkflame(pinFlameSensor, 800, 3, 1000);
-  Serial.println("Starting Loop");
 }
 
 void loop()
 {
-  //Serial.println(digitalRead(buttonPin) == HIGH ? "ON" : "OFF");
   buttonState = digitalRead(buttonPin);
 
   sensors.requestTemperatures(); // Send command to all the sensors for temperature conversion
@@ -122,6 +160,7 @@ void loop()
       rememberTime = millis();
     }
   }
+
   if (relays)
   {
     digitalWrite(pinBurnerFeeder, motor_running);
@@ -132,7 +171,6 @@ void loop()
   chimney_needs_clean = waste_gas_temp > 130 ? true : false;
 
   update_lcd();
-
   flame_counts();
   loopcount();
 }
