@@ -68,6 +68,7 @@ Data Storage:
 
 Resources:
  - Connect LCD and rtc clock simmultaneously https://create.arduino.cc/projecthub/Tishin/rtcds3231-with-1602-lcd-i2c-367cb6
+ - Connect several relays with a single wire https://create.arduino.cc/projecthub/Pedro52/arduino-with-neopixel-optocouplers-controlling-many-relays-5f2573
  - Connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino
  - Connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
  - How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/

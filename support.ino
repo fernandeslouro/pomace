@@ -5,9 +5,7 @@ void printdate(DateTime now)
   Serial.print(now.month(), DEC);
   Serial.print('/');
   Serial.print(now.day(), DEC);
-  Serial.print(" (");
-  Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
-  Serial.print(") ");
+  Serial.print(" ");
   Serial.print(now.hour(), DEC);
   Serial.print(':');
   Serial.print(now.minute(), DEC);
@@ -16,12 +14,61 @@ void printdate(DateTime now)
   Serial.println();
 
   /*
+
+  Serial.print(" (");
+  Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
+  Serial.print(") ");
+
   Serial.print(" since midnight 1/1/1970 = ");
   Serial.print(now.unixtime());
   Serial.print("s = ");
   Serial.print(now.unixtime() / 86400L);
   Serial.println("d");
   */
+}
+
+void update_lcd(DateTime now)
+{
+  if (millis() - screenPreviousMillis >= SCREEN_INTERVAL_MILLIS)
+  {
+    screenPreviousMillis = millis();
+    lcd.setCursor(0, 0);
+    lcd.print("B:");
+    lcd.print(boiler_temp);
+    lcd.setCursor(8, 0);
+    lcd.print("HW:");
+    lcd.print(hot_water_temp);
+    lcd.setCursor(0, 1);
+    lcd.print("L:");
+    lcd.print(analogRead(pinFlameSensor));
+    lcd.setCursor(7, 1);
+    lcd.print("Fan:");
+    lcd.print(fanPower);
+    lcd.setCursor(0, 2);
+    lcd.print("M:");
+    lcd.print(onDuration);
+    lcd.print(" ");
+    lcd.print(offDuration);
+    lcd.print(" ");
+    lcd.print(motor_running);
+    lcd.setCursor(0, 3);
+    lcd.print("T:");
+    lcd.print(thermostat);
+    lcd.setCursor(4, 3);
+    lcd.print("Bt:");
+    lcd.print(buttonState);
+    lcd.setCursor(9, 3);
+    lcd.print("Fl:");
+    lcd.print(flameOn);
+
+    /*
+    lcd.setCursor(15, 3);
+    lcd.print(now.hour());
+    lcd.print(':');
+    lcd.print(now.minute());
+    lcd.print(':');
+    */
+  }
 }
 
 void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_counts)
@@ -42,27 +89,27 @@ void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_cou
   //Serial.println("Done");
 }
 
-
-void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned long *offDuration)
+void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned long *offDuration, int *fanPower)
 {
   if (boiler_temperature < 55)
   {
     *onDuration = 2000;
     *offDuration = 30000;
-    dimmer.setPower(30);
+    *fanPower = 30;
   }
   else if (boiler_temperature > 55 && boiler_temperature < 65)
   {
     *onDuration = 1000;
     *offDuration = 60000;
-    dimmer.setPower(20);
+    *fanPower = 20;
   }
   else if (boiler_temperature > 65)
   {
     *onDuration = 1000;
     *offDuration = 90000;
-    dimmer.setPower(10);
+    *fanPower = 10;
   }
+  dimmer.setPower(*fanPower);
 }
 
 void flame_counts()
