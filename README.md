@@ -67,8 +67,9 @@ Data Storage:
 
 
 Resources:
- - How to connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino
- - How to connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
+ - Connect LCD and rtc clock simmultaneously https://create.arduino.cc/projecthub/Tishin/rtcds3231-with-1602-lcd-i2c-367cb6
+ - Connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino
+ - Connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
  - How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
  - How to setup the light detector (just a photoresistor): https://create.arduino.cc/projecthub/ccPegasus/photoresistor-brightness-sensor-db3110
  - How to solder I²C module to LCD https://www.youtube.com/watch?v=jTqOqmjpMIQ
