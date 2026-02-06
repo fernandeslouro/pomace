@@ -5,12 +5,12 @@
 #include <DallasTemperature.h>
 #include <RBDdimmer.h>
 
+// ---------- UI / timing ----------
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+unsigned long screenPreviousMillis = 0;
+const unsigned long SCREEN_INTERVAL_MILLIS = 1000;
 
-// Set the LCD address to 0x27 for a 16 chars and 2 line display
-LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 16 chars and 2 line display
-int screenPreviousMillis;
-const int SCREEN_INTERVAL_MILLIS = 1000;
-
+// ---------- Pins (current known wiring) ----------
 const int pinBurnerFeeder = 8;
 const int pinHotWaterPump = 9;
 const int pinCentralHeatingPump = 10;
@@ -19,126 +19,279 @@ const int pinFlameSensor = A0;
 const int buttonPin = 13;
 const int dimmerOutputPin = 3;
 const int pinOneWireTempSensors = 7;
-bool relays = true;
+const int pinThermostatDemand = 12;
 
+// Optional selector switch inputs (set true once wired)
+const bool useModeSelectorPins = false;
+const int pinModeAutoSelect = 22;
+const int pinModeRemoteSelect = 23;
 
-dimmerLamp dimmer(dimmerOutputPin); //initialase port for dimmer for MEGA, Leonardo, UNO, Arduino M0, Arduino Zero 
+// Optional safety chain digital inputs (set true once wired)
+const bool useSafetyInputPins = false;
+const int pinSafetyHighLimit = 24;
+const int pinSafetyBackfire = 25;
+const int pinSafetyEStop = 26;
+const bool safetyInputsActiveLow = true;
 
-// Temperature Sensors
-OneWire oneWire(pinOneWireTempSensors); // Setup a oneWire instance to communicate with any OneWire devices
-DallasTemperature sensors(&oneWire);    // Pass our oneWire reference to Dallas Temperature.
-int deviceCount = 0;
-float tempC, boiler_temp, hot_water_temp, waste_gas_temp;
-bool thermostat = true;
+// Stall inputs from overload/current-monitor contacts
+const bool useStallInputs = true;
+const int pinStallSF = 30;
+const int pinStallPH = 31;
+const int pinStallPWH = 32;
+const int pinStallSB = 33;
+const int pinStallFSG = 34;
+const int pinStallFC = 35;
+const int pinStallStorage = 36;
+const int pinStallCrusher = 37;
 
-// Real-Time Clock
+// ---------- Actuator / control constants ----------
+const float HOT_WATER_TARGET_C = 60.0;
+const float BOILER_LOW_C = 55.0;
+const float BOILER_MED_C = 65.0;
+const float BOILER_HIGH_C = 75.0;
+
+const unsigned long FEEDER_ON_LOW_MS = 2000;
+const unsigned long FEEDER_OFF_LOW_MS = 30000;
+const unsigned long FEEDER_ON_MED_MS = 1500;
+const unsigned long FEEDER_OFF_MED_MS = 60000;
+const unsigned long FEEDER_ON_HIGH_MS = 1000;
+const unsigned long FEEDER_OFF_HIGH_MS = 90000;
+
+const unsigned long STALL_DETECT_MS = 300;
+const unsigned long JAM_PULSE_ON_MS = 500;
+const unsigned long JAM_PULSE_OFF_MS = 700;
+const unsigned long JAM_COOLDOWN_MS = 10000;
+const uint8_t JAM_MAX_PULSES_PER_BLOCK = 6;
+
+const int FLAME_THRESHOLD = 500;
+const unsigned long FLAME_INTERVAL_MILLIS = 1000;
+const byte FLAME_SENSOR_SAMPLES = 10;
+
+// ---------- Control modes ----------
+enum ControlMode
+{
+  MODE_AUTO,
+  MODE_OFF,
+  MODE_REMOTE
+};
+
+enum MotorCommand
+{
+  CMD_AUTO,
+  CMD_FORCE_OFF,
+  CMD_FORCE_ON
+};
+
+enum MotorId
+{
+  MOTOR_SF,
+  MOTOR_PH,
+  MOTOR_PWH,
+  MOTOR_SB,
+  MOTOR_FSG,
+  MOTOR_FC,
+  MOTOR_STORAGE,
+  MOTOR_CRUSHER,
+  MOTOR_COUNT
+};
+
+enum SafetyState
+{
+  SAFETY_NORMAL,
+  SAFETY_DEGRADED,
+  SAFETY_LOCKOUT
+};
+
+struct MotorControl
+{
+  const char *name;
+  int pinOutput;
+  int pinStallInput;
+  bool outputActiveLow;
+  bool stallInputActiveLow;
+
+  MotorCommand remoteCommand;
+
+  bool outputOn;
+  bool faultLatched;
+  bool recoveryActive;
+  bool cooldownActive;
+  bool finalAttempt;
+
+  unsigned long outputChangedAtMs;
+  unsigned long stallSinceMs;
+  unsigned long recoveryStepStartedMs;
+  uint8_t pulsesCompleted;
+};
+
+// ---------- Hardware drivers ----------
+dimmerLamp dimmer(dimmerOutputPin);
+OneWire oneWire(pinOneWireTempSensors);
+DallasTemperature sensors(&oneWire);
 RTC_DS1307 rtc;
-DateTime now;
 
-// Button
-int buttonState = 0;
+// ---------- Sensors/state ----------
+int deviceCount = 0;
+float boiler_temp = DEVICE_DISCONNECTED_C;
+float hot_water_temp = DEVICE_DISCONNECTED_C;
+float waste_gas_temp = DEVICE_DISCONNECTED_C;
+bool sensorsHealthy = false;
 
-// Flame Sensor
-int flameSensorValue = 0; // variable to store the value coming from the sensor
+bool thermostatDemand = true;
+bool thermostatOverrideEnabled = false;
+bool thermostatOverrideDemand = true;
+bool flameOn = false;
 unsigned long flameSensorPreviousMillis = 0;
-const int FLAME_INTERVAL_MILLIS = 1000;
 unsigned int flameCounts = 0;
 unsigned int flameSum = 0;
-const byte FLAME_SENSOR_SAMPLES = 10;
-bool flameOn;
-int motor_running = HIGH; // initial state of LED
-long rememberTime = 0;    // this is used by the code
 
-// Other
-unsigned long onDuration;
-unsigned long offDuration;
-int fanPower;
-bool chimney_needs_clean;
+int fanPower = 20;
+bool chimney_needs_clean = false;
+bool highLimitTripped = false;
+bool backfireTripped = false;
+bool eStopTripped = false;
+bool safetyLockoutLatched = false;
+SafetyState safetyState = SAFETY_DEGRADED;
 
-// Count cycle time
-int loop_counter;                   //holds the count for every loop pass
-int time_shown_counter;             //holds the count for every loop pass
-long loop_timer_now;                //holds the current millis
-long loop_timer_previous_millis;    //holds the previous millis
-float loop_time;                    //holds difference (loop_timer_now - previous_millis) = total execution time
-long show_time_counter_every = 100; //Show average time every x loops
+// ---------- Feeder duty cycle ----------
+bool feederCycleOn = false;
+unsigned long feederCycleChangedMs = 0;
+unsigned long feederOnMs = FEEDER_ON_LOW_MS;
+unsigned long feederOffMs = FEEDER_OFF_LOW_MS;
 
+// ---------- Operator controls ----------
+ControlMode currentMode = MODE_AUTO;
+int buttonState = HIGH;
+int lastButtonState = HIGH;
+bool buttonPressHandled = false;
+unsigned long lastButtonEdgeMs = 0;
+const unsigned long BUTTON_DEBOUNCE_MS = 80;
+
+// ---------- Motors (non-fan motors for anti-jam) ----------
+MotorControl motors[MOTOR_COUNT] = {
+    {"SF", pinBurnerFeeder, pinStallSF, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"PH", pinCentralHeatingPump, pinStallPH, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"PWH", pinHotWaterPump, pinStallPWH, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"SB", pinStorageFeeder, pinStallSB, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"FSG", -1, pinStallFSG, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"FC", -1, pinStallFC, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"STORAGE", -1, pinStallStorage, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0},
+    {"CRUSHER", -1, pinStallCrusher, true, true, CMD_AUTO, false, false, false, false, false, 0, 0, 0, 0}};
+
+// ---------- Forward declarations ----------
+void handleSerialInput();
+void processCommand(char *line);
+int motorIndexByName(const char *name);
+
+void readTemperatureSensors();
+bool isValidTemperature(float valueC);
+
+void updateModeSelection();
+const char *modeToString(ControlMode mode);
+const char *safetyStateToString(SafetyState state);
+int countLatchedFaults();
+void updateThermostatDemand();
+void updateSafetyState();
+bool applySafetyGate(int motorIndex, bool desiredRun);
+
+void updateFeederDurationsByBoiler();
+void updateFeederCycle(unsigned long nowMs);
+
+void updateFanPowerByBoiler();
+void flame_counts();
+
+bool resolveDesiredMotorState(int motorIndex, bool autoDesired);
+bool readStallInput(const MotorControl &motor);
+void setMotorOutput(MotorControl &motor, bool on, unsigned long nowMs);
+void startRecovery(MotorControl &motor, unsigned long nowMs, bool finalAttempt);
+void updateRecovery(MotorControl &motor, bool desiredRun, unsigned long nowMs);
+void updateMotor(MotorControl &motor, bool desiredRun, unsigned long nowMs);
+void resetMotorFault(MotorControl &motor);
+
+void update_lcd(DateTime now);
+void printStatus();
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
-  dimmer.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE)
+  dimmer.begin(NORMAL_MODE, ON);
 
-  lcd.init(); // initialize the lcd
+  lcd.init();
   lcd.backlight();
-  
-  pinMode(buttonPin, INPUT);
-  pinMode(pinBurnerFeeder, OUTPUT);
-  pinMode(pinHotWaterPump, OUTPUT);
-  pinMode(pinCentralHeatingPump, OUTPUT);
-  pinMode(pinStorageFeeder, OUTPUT);
-  digitalWrite(pinBurnerFeeder, HIGH);
-  digitalWrite(pinHotWaterPump, HIGH);
-  digitalWrite(pinCentralHeatingPump, HIGH);
-  digitalWrite(pinStorageFeeder, HIGH);
 
-  sensors.begin(); // Start up the library
-  // locate devices on the bus
-  Serial.print("Locating devices...");
-  Serial.print("Found ");
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(pinThermostatDemand, INPUT_PULLUP);
+  if (useModeSelectorPins)
+  {
+    pinMode(pinModeAutoSelect, INPUT_PULLUP);
+    pinMode(pinModeRemoteSelect, INPUT_PULLUP);
+  }
+
+  for (int i = 0; i < MOTOR_COUNT; i++)
+  {
+    if (motors[i].pinOutput >= 0)
+    {
+      pinMode(motors[i].pinOutput, OUTPUT);
+      setMotorOutput(motors[i], false, millis());
+    }
+    if (useStallInputs && motors[i].pinStallInput >= 0)
+    {
+      pinMode(motors[i].pinStallInput, INPUT_PULLUP);
+    }
+  }
+
+  if (useSafetyInputPins)
+  {
+    pinMode(pinSafetyHighLimit, INPUT_PULLUP);
+    pinMode(pinSafetyBackfire, INPUT_PULLUP);
+    pinMode(pinSafetyEStop, INPUT_PULLUP);
+  }
+
+  sensors.begin();
   deviceCount = sensors.getDeviceCount();
-  Serial.print(deviceCount, DEC);
-  Serial.println(" devices.");
-  Serial.println("");
 
-  Serial.print("Loading Clock... ");
   rtc.begin();
-  Serial.println("Done");
 
-
-  //checkflame(pinFlameSensor, 800, 3, 1000);
+  Serial.println("NPBC-V3M replacement controller V1 boot");
+  Serial.print("OneWire sensors found: ");
+  Serial.println(deviceCount);
+  printStatus();
 }
 
 void loop()
 {
-  buttonState = digitalRead(buttonPin);
+  const unsigned long nowMs = millis();
 
-  sensors.requestTemperatures(); // Send command to all the sensors for temperature conversion
+  handleSerialInput();
+  updateModeSelection();
+  updateThermostatDemand();
+  readTemperatureSensors();
+  flame_counts();
 
-  boiler_temp = sensors.getTempCByIndex(0);
-  hot_water_temp = sensors.getTempCByIndex(1);
-  waste_gas_temp = sensors.getTempCByIndex(2);
+  chimney_needs_clean = sensorsHealthy && waste_gas_temp > 130.0;
+  updateSafetyState();
 
-  motor_control(boiler_temp, &onDuration, &offDuration, &fanPower);
+  updateFeederDurationsByBoiler();
+  updateFeederCycle(nowMs);
+  updateFanPowerByBoiler();
 
-  if (motor_running == LOW)
+  bool autoDesired[MOTOR_COUNT] = {false};
+  autoDesired[MOTOR_SF] = feederCycleOn;
+  autoDesired[MOTOR_PH] = thermostatDemand;
+  autoDesired[MOTOR_PWH] = sensorsHealthy ? (hot_water_temp < HOT_WATER_TARGET_C) : false;
+  autoDesired[MOTOR_SB] = false;
+  autoDesired[MOTOR_FSG] = feederCycleOn;
+  autoDesired[MOTOR_FC] = false;
+  autoDesired[MOTOR_STORAGE] = false;
+  autoDesired[MOTOR_CRUSHER] = false;
+
+  for (int i = 0; i < MOTOR_COUNT; i++)
   {
-    if ((millis() - rememberTime) >= onDuration)
-    {
-      motor_running = HIGH;
-      rememberTime = millis();
-    }
+    bool desiredRun = resolveDesiredMotorState(i, autoDesired[i]);
+    desiredRun = applySafetyGate(i, desiredRun);
+    updateMotor(motors[i], desiredRun, nowMs);
   }
-  else
-  {
-    if ((millis() - rememberTime) >= offDuration)
-    {
-      motor_running = LOW;
-      rememberTime = millis();
-    }
-  }
-
-  if (relays)
-  {
-    digitalWrite(pinBurnerFeeder, motor_running);
-    thermostat ? digitalWrite(pinCentralHeatingPump, LOW) : digitalWrite(pinCentralHeatingPump, HIGH);
-    hot_water_temp < 60 ? digitalWrite(pinHotWaterPump, LOW) : digitalWrite(pinHotWaterPump, HIGH);
-  }
-
-  chimney_needs_clean = waste_gas_temp > 130 ? true : false;
 
   update_lcd(rtc.now());
-  flame_counts();
-  loopcount();
 }

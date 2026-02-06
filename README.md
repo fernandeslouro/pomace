@@ -1,81 +1,84 @@
-# Pomace
+# Pomace Boiler Controller (NPBC-V3M Replacement)
 
-Building a custom controller board for our family's pomace boiler. 
+## Project
+Replace the existing Naturela NPBC-V3M boiler controller with a programmable controller + web app, while reusing panel hardware where possible.
 
-What the board will need to control:
- - motor to get pomace into the fire (relay, according to light sensor and thermometer) - pin 7
- - fan motor which blows air into the flame (speed controlled, according to light sensor and thermometer)
- - motors bring water from the house (relay, controlled by termometer and requests in the house) - pin 8
- - motor to bring pomace into pyramidal storage (relay, according to a light/fullness sensor to be installed)
- - motor to crunch pomace and bring it to the larger storage (user-actioned, but must add a protection against stalling)
- - heat gun turn on/off (maybe)
- - Will need a clock as well
+## Current Decisions
+- Country: Portugal (`230 VAC`, `50 Hz`)
+- Reuse existing contactors
+- Reuse existing sensors
+- Keep analog fan output path
+- Door switch not used
+- Anti-jam applies to all motors except `FM`
+- Budget target: around `200 EUR` for control hardware (web host separate)
 
-Sensors the board will have to process:
- - Boiler temperature
- - Temperature of the waters going through the house (sanitary hot water)
- - Temperature inside the house *really a binary value provided by a thermostat inside the house)
- - Waste gas temperature
- - Flame light
- - In the future:
-    - Fullness of pyramid storage 
-    - Stalling of the motors (especially the pomace breaker)
+## Repository Status
+- Firmware scaffold is in place for:
+- `AUTO/OFF/REMOTE` modes
+- remote command interface (serial command API)
+- anti-jam/stall recovery framework for non-fan motors
+- Files:
+- `algorithm.ino`
+- `support.ino`
+- `connection.png` (existing V3M wiring diagram reference)
+- `NPBC_V3M_REPLACEMENT_BOM.md` (detailed shopping list and wiring notes)
 
-Components Required:
- - Arduino Mega [BOUGHT]
- - Wifi Module [BOUGHT]
- - 4 Line LCD [BOUGHT]
- - Clock Module [BOUGHT]
- - Relays Shield [BOUGHT]
- - Battery for clock module [BOUGHT]
- - 12V Power Supply for relay module [BOUGHT]
- - I²C Module for Screen [BOUGHT]
- - Male-Female, Male-Male, Female-Female jumper cables [BOUGHT]
- - fio normal de arame [BOUGHT]
- - 4 Additional Temperature sensors [BOUGHT]
- - 4 4.7 Ohm resistors to use with temperatrure sensor [BOUGHT]
- - 10K Ohm, 100K Ohm resistors [BOUGHT]
- - Buttons of some sort [BOUGHT]
- - Dimmer module [BOUGHT]
- - Flame sensor  [BOUGHT, need a more heavy duty one]
- - 6X (at least) Extension cords to use with relays/dimmer (boiler feeder, hot water pump, radiators pump, ashes feeder, fan motor, large feeder) https://www.amazon.es/Brennenstuhl-Alargo-europeo-3-m/dp/B004AQTFWY/ref=sr_1_6?__mk_es_ES=%C3%85M%C3%85%C5%BD%C3%95%C3%91&crid=WNHPZ8I7D70B&keywords=alargadera+enchufe&qid=1641738516&sprefix=alargadera+enchuf%2Caps%2C187&sr=8-6
- - SD Card Module and SD Card
+## Recommended Control Hardware
+- 1x Waveshare `ESP32-S3-ETH-8DI-8RO-C`
+- 1x RS485 Modbus analog output module (`0-10V`) for fan command
+- 1x RS485 Modbus digital I/O module (required for strict stall detection on all non-fan motors)
+- 1x RS485 Modbus relay output module only if optional loads are kept (storage/crusher/heat gun)
 
- Currenly missing to get system working:
-  - Dimmer working with Fan Control
-  - Temperature sensor from hot water
-  - Thermostat working (kind of optional)
-  - Connections with wires to motors
+## Purchase List (Portugal, tentative)
 
-Interrupts
- - Needed for menus
- - Needed for motor control/dimmer
+| Qty | Item | Target Price | Where to Buy |
+|---:|---|---:|---|
+| 1 | Waveshare `ESP32-S3-ETH-8DI-8RO-C` | `~48-75 EUR` | Portugal distributors (Waveshare): Botnroll / PTRobotics |
+| 1 | Modbus RTU Analog Output 8CH (`0-10V`) Waveshare 26211 | `24,90 EUR` | https://www.botnroll.com/pt/rs485/5373-conversor-industrial-din-modbus-rtu-para-sa-das-anal-gica-8-canais-output-0-10v-waveshare-26211.html |
+| 1 | Modbus RTU Digital I/O 8CH configurable Waveshare 26244 | `26,50 EUR` | https://www.botnroll.com/pt/rs485/5382-conversor-industrial-din-de-8-ios-digitais-configur-vel-para-module-modbus-rtu-waveshare-26244.html |
+| 1 | DIN PSU 24VDC 100W | `17,95 EUR` | https://www.botnroll.com/pt/acdc-24v/5481-fonte-de-alimenta-o-calha-din-24vdc-4-15a-100w.html |
+| 1 | USB-TTL adapter FT232RNL | `9,50 EUR` | https://www.botnroll.com/pt/usb/6099-conversor-industrial-usb-para-ttl-com-chip-original-ft232rnl-e-circuitos-de-prote-o-waveshare-26738.html |
+| 1 | DIN terminals + fuse holders + snubbers (allowance) | `25-40 EUR` | https://mauser.pt/material-electrico/quadros-e-distribuicao/ligacoes/bornes-din |
 
-Web server should be able to:
- - Show the present state of the boiler
- - Provide controls for motors
- - Using Blynk running on our VPS
+Estimated control subtotal (without optional relay expansion): `~152-218 EUR`
 
-Data Storage:
- - Timestamp from clock
- - Stored into SD card
+## Web App Materials
+- 1x Raspberry Pi 4 (or existing mini PC)
+- 1x PSU + storage (if Pi)
+- 1x small gigabit switch
+- Cat6 patch cables
 
- Motor control:
- - I think I can afford to spare one interrupt pin for the dimmer
- - I need to control the speed of an AC single-phase motor
- - 50 Hz, 220 V, 0.09 kW, 2800 RPM
+## Local HMI
+- Preferred: reuse existing `20x4 I2C` LCD + 3 buttons (`UP`, `DOWN`, `OK/BACK`)
+- Optional: 4.3" serial HMI touchscreen later
 
+## Manual Override Hardware
+- 3-position selector (`AUTO / OFF / REMOTE`)
+- Manual reset pushbutton
+- Emergency stop (replace only if needed)
 
-Resources:
- - Connect LCD and rtc clock simmultaneously https://create.arduino.cc/projecthub/Tishin/rtcds3231-with-1602-lcd-i2c-367cb6
- - Connect several relays with a single wire https://create.arduino.cc/projecthub/Pedro52/arduino-with-neopixel-optocouplers-controlling-many-relays-5f2573
- - Connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino
- - Connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
- - How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
- - How to setup the light detector (just a photoresistor): https://create.arduino.cc/projecthub/ccPegasus/photoresistor-brightness-sensor-db3110
- - How to solder I²C module to LCD https://www.youtube.com/watch?v=jTqOqmjpMIQ
- - https://mauser.pt/catalog/
- - https://github.com/marcass/furnace_control
- - https://www.instructables.com/Arduino-Pellet-Stove-Controller/
- - https://www.youtube.com/watch?v=_Zg5DRCHWfk
+## Wiring Materials
+- `H07V-K 1.5 mm2` panel wire
+- `H07V-K 2.5 mm2` for PE/heavier runs
+- Shielded twisted pair for `RS485`
+- Shielded instrument cable for analog/sensor runs
+- Ferrules and DIN terminal blocks
 
+## Strict Stall Detection (practical)
+- Prefer existing overload relay auxiliary contacts (`95-96` / `97-98`) into DI
+- If unavailable, add one current monitoring relay per critical motor
+- For single-phase motors, pass only phase (`L`) through CT window
+- Use detector relay output (`NO/NC`) into DI module
+
+## Remaining Open Items
+1. Contactor coil voltage (`24VDC` or `230VAC`)
+2. Thermostat type (dry contact or powered output)
+3. Sensor electrical type (`NTC10K`, `PT100`, `PT1000`, other)
+4. Optional points in use: `PT100/PT1000`, `NRC/IR`
+5. Fan motor current and capacitor from nameplate
+
+## References
+- Waveshare controller: https://www.waveshare.com/esp32-s3-eth-8di-8ro-c.htm
+- Waveshare distributors: https://www.waveshare.com/distributors
+- NPBC-V3M technical manual: https://www.naturela-bg.com/files/NPBC-V3M-1_TM_2_1_EN.pdf
+- NPBC-V3M user guide: https://www.naturela-bg.com/files/NPBC-V3M-1_rev2_1_EN.pdf
