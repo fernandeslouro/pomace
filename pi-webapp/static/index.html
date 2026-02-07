@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pomace Boiler Control</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>Pomace Boiler Control</h1>
+        <p class="sub">Raspberry Pi local dashboard</p>
+      </header>
+
+      <section class="card">
+        <h2>Status</h2>
+        <p id="authority-line" class="authority">Control authority: unknown</p>
+        <div class="grid" id="summary-grid"></div>
+        <p id="status-ts">Last update: never</p>
+      </section>
+
+      <section class="card">
+        <h2>Controls</h2>
+
+        <div class="control-group">
+          <h3>Mode</h3>
+          <p class="hint">For full app control, set panel selector to <strong>REMOTE</strong>.</p>
+          <div class="row">
+            <button data-action="mode" data-value="AUTO">AUTO</button>
+            <button data-action="mode" data-value="OFF">OFF</button>
+            <button data-action="mode" data-value="REMOTE">REMOTE</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Thermostat</h3>
+          <div class="row">
+            <button data-action="thermostat" data-value="AUTO">AUTO</button>
+            <button data-action="thermostat" data-value="1">ON</button>
+            <button data-action="thermostat" data-value="0">OFF</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Flame Override</h3>
+          <div class="row">
+            <button data-action="flame" data-value="AUTO">AUTO</button>
+            <button data-action="flame" data-value="ON">FORCE ON</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Run Stage Override</h3>
+          <div class="row">
+            <button data-action="stage" data-value="AUTO">AUTO</button>
+            <button data-action="stage" data-value="1">STAGE 1</button>
+            <button data-action="stage" data-value="2">STAGE 2</button>
+            <button data-action="stage" data-value="3">STAGE 3</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Reset</h3>
+          <div class="row">
+            <button data-action="reset" data-value="BOILER">RESET BOILER</button>
+            <button data-action="reset" data-value="SAFETY">RESET SAFETY</button>
+            <button data-action="reset" data-value="ALL">RESET ALL</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Motor Override</h3>
+          <div class="row">
+            <select id="motor-select">
+              <option>SF</option>
+              <option>PH</option>
+              <option>PWH</option>
+              <option>SB</option>
+              <option>FSG</option>
+              <option>FC</option>
+              <option>STORAGE</option>
+              <option>CRUSHER</option>
+            </select>
+            <select id="motor-state">
+              <option value="AUTO">AUTO</option>
+              <option value="ON">ON</option>
+              <option value="OFF">OFF</option>
+            </select>
+            <button id="motor-apply">APPLY MOTOR</button>
+            <button id="motor-jam">JAM MOTOR</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Motor Status</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Motor</th>
+              <th>On</th>
+              <th>Fault</th>
+              <th>Recovery</th>
+            </tr>
+          </thead>
+          <tbody id="motor-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Raw Command</h2>
+        <form id="raw-form">
+          <input id="raw-input" type="text" placeholder="STATUS" maxlength="64" required />
+          <button type="submit">Send</button>
+        </form>
+        <pre id="command-output"></pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

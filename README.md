@@ -13,15 +13,22 @@ Replace the existing Naturela NPBC-V3M boiler controller with a programmable con
 - Budget target: around `200 EUR` for control hardware (web host separate)
 
 ## Repository Status
-- Firmware scaffold is in place for:
+- Firmware implements:
 - `AUTO/OFF/REMOTE` modes
-- remote command interface (serial command API)
+- startup state machine (`purge -> feed -> flame prove -> run`)
+- flame-loss restart policy and boiler process lockout
+- flame override (`FLAME ON`) for failed/noisy flame sensor scenarios
+- run stage override (`STAGE 1|2|3`) with return to automatic (`STAGE AUTO`)
 - anti-jam/stall recovery framework for non-fan motors
-- Files:
+- serial command interface (including `RESET BOILER`)
+- Key files:
 - `algorithm.ino`
 - `support.ino`
+- `control_config.h` (timing/threshold tunables)
+- `hardware_profile.h` (pin map and profile toggles)
+- `pi-webapp/` (Raspberry Pi API + dashboard for LAN/Tailscale access)
+- `NPBC_V3M_REPLACEMENT_BOM.md` (shopping list and wiring notes)
 - `connection.png` (existing V3M wiring diagram reference)
-- `NPBC_V3M_REPLACEMENT_BOM.md` (detailed shopping list and wiring notes)
 
 ## Recommended Control Hardware
 - 1x Waveshare `ESP32-S3-ETH-8DI-8RO-C`
@@ -76,6 +83,13 @@ Estimated control subtotal (without optional relay expansion): `~152-218 EUR`
 3. Sensor electrical type (`NTC10K`, `PT100`, `PT1000`, other)
 4. Optional points in use: `PT100/PT1000`, `NRC/IR`
 5. Fan motor current and capacitor from nameplate
+
+## Serial Overrides
+- Force flame detected: `FLAME ON`
+- Return flame logic to sensor: `FLAME AUTO`
+- Force run stage: `STAGE 1`, `STAGE 2`, `STAGE 3`
+- Return run stage to temperature-based logic: `STAGE AUTO`
+- Stage override is applied in `RUN` mode and used automatically when controller reaches `RUN`
 
 ## References
 - Waveshare controller: https://www.waveshare.com/esp32-s3-eth-8di-8ro-c.htm

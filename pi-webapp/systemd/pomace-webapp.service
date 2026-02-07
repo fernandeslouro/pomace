@@ -1,0 +1,17 @@
+[Unit]
+Description=Pomace Boiler Web App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/pomace/pi-webapp
+EnvironmentFile=/opt/pomace/pi-webapp/.env
+ExecStart=/opt/pomace/pi-webapp/.venv/bin/uvicorn app:app --host ${POMACE_WEB_HOST} --port ${POMACE_WEB_PORT}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

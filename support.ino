@@ -1,5 +1,7 @@
 #include <string.h>
 #include <ctype.h>
+#include "control_config.h"
+#include "hardware_profile.h"
 
 static char serialLine[96];
 static uint8_t serialLinePos = 0;
@@ -32,7 +34,7 @@ bool readActiveInput(int pin, bool activeLow)
 
 bool isValidTemperature(float valueC)
 {
-  return valueC != DEVICE_DISCONNECTED_C && valueC > -40.0 && valueC < 150.0;
+  return valueC != DEVICE_DISCONNECTED_C && valueC > VALID_TEMP_MIN_C && valueC < VALID_TEMP_MAX_C;
 }
 
 void readTemperatureSensors()
@@ -69,6 +71,73 @@ const char *safetyStateToString(SafetyState state)
     return "DEGRADED";
   }
   return "LOCKOUT";
+}
+
+const char *boilerPhaseToString(BoilerPhase phase)
+{
+  if (phase == BOILER_IDLE)
+  {
+    return "IDLE";
+  }
+  if (phase == BOILER_STARTUP_PURGE)
+  {
+    return "START_PURGE";
+  }
+  if (phase == BOILER_STARTUP_FEED)
+  {
+    return "START_FEED";
+  }
+  if (phase == BOILER_STARTUP_FLAME_PROVE)
+  {
+    return "FLAME_PROVE";
+  }
+  if (phase == BOILER_RUN)
+  {
+    return "RUN";
+  }
+  if (phase == BOILER_RESTART_DELAY)
+  {
+    return "RESTART_WAIT";
+  }
+  if (phase == BOILER_SHUTDOWN_OVERRUN)
+  {
+    return "PUMP_OVERRUN";
+  }
+  if (phase == BOILER_SHUTDOWN_POST_PURGE)
+  {
+    return "POST_PURGE";
+  }
+  return "LOCKOUT";
+}
+
+const char *boilerFaultToString(BoilerFault fault)
+{
+  if (fault == BOILER_FAULT_NONE)
+  {
+    return "NONE";
+  }
+  if (fault == BOILER_FAULT_IGNITION_TIMEOUT)
+  {
+    return "IGN_TIMEOUT";
+  }
+  if (fault == BOILER_FAULT_FLAME_LOSS)
+  {
+    return "FLAME_LOSS";
+  }
+  return "SENSOR";
+}
+
+const char *runStageToString(RunStage stage)
+{
+  if (stage == RUN_STAGE_1)
+  {
+    return "1";
+  }
+  if (stage == RUN_STAGE_2)
+  {
+    return "2";
+  }
+  return "3";
 }
 
 void updateSafetyState()
@@ -109,6 +178,16 @@ bool applySafetyGate(int motorIndex, bool desiredRun)
 {
   if (safetyState == SAFETY_LOCKOUT)
   {
+    return false;
+  }
+
+  if (boilerProcessLockoutLatched)
+  {
+    // In process lockout, keep only circulation pumps available.
+    if (motorIndex == MOTOR_PH || motorIndex == MOTOR_PWH)
+    {
+      return desiredRun;
+    }
     return false;
   }
 
@@ -205,28 +284,24 @@ int countLatchedFaults()
 
 void updateFeederDurationsByBoiler()
 {
-  if (!sensorsHealthy)
-  {
-    feederOnMs = FEEDER_ON_HIGH_MS;
-    feederOffMs = FEEDER_OFF_HIGH_MS;
-    return;
-  }
+  RunStage stage = resolveRunStage();
+  activeRunStage = stage;
 
-  if (boiler_temp <= BOILER_LOW_C)
+  if (stage == RUN_STAGE_1)
   {
     feederOnMs = FEEDER_ON_LOW_MS;
     feederOffMs = FEEDER_OFF_LOW_MS;
+    return;
   }
-  else if (boiler_temp <= BOILER_MED_C)
+  if (stage == RUN_STAGE_2)
   {
     feederOnMs = FEEDER_ON_MED_MS;
     feederOffMs = FEEDER_OFF_MED_MS;
+    return;
   }
-  else
-  {
-    feederOnMs = FEEDER_ON_HIGH_MS;
-    feederOffMs = FEEDER_OFF_HIGH_MS;
-  }
+
+  feederOnMs = FEEDER_ON_HIGH_MS;
+  feederOffMs = FEEDER_OFF_HIGH_MS;
 }
 
 void updateFeederCycle(unsigned long nowMs)
@@ -239,44 +314,383 @@ void updateFeederCycle(unsigned long nowMs)
   }
 }
 
-void updateFanPowerByBoiler()
+RunStage resolveRunStage()
 {
-  if (safetyState == SAFETY_LOCKOUT)
+  if (runStageOverrideEnabled)
   {
-    fanPower = 0;
-    dimmer.setPower(fanPower);
-    return;
-  }
-
-  if (safetyState == SAFETY_DEGRADED)
-  {
-    fanPower = 20;
-    dimmer.setPower(fanPower);
-    return;
+    return runStageOverride;
   }
 
   if (!sensorsHealthy)
   {
-    fanPower = 20;
+    return RUN_STAGE_3;
   }
-  else if (boiler_temp < BOILER_LOW_C)
+  if (boiler_temp <= BOILER_LOW_C)
   {
-    fanPower = 80;
+    return RUN_STAGE_1;
   }
-  else if (boiler_temp < BOILER_MED_C)
+  if (boiler_temp <= BOILER_MED_C)
   {
-    fanPower = 60;
+    return RUN_STAGE_2;
   }
-  else if (boiler_temp < BOILER_HIGH_C)
+  if (boiler_temp <= BOILER_HIGH_C)
   {
-    fanPower = 40;
+    return RUN_STAGE_3;
   }
-  else
+  return RUN_STAGE_3;
+}
+
+int clampFanPower(int power)
+{
+  if (power < FAN_POWER_MIN)
   {
-    fanPower = 20;
+    return FAN_POWER_MIN;
+  }
+  if (power > FAN_POWER_MAX)
+  {
+    return FAN_POWER_MAX;
+  }
+  return power;
+}
+
+int computeRunFanPower()
+{
+  RunStage stage = resolveRunStage();
+  activeRunStage = stage;
+
+  if (stage == RUN_STAGE_1)
+  {
+    return FAN_POWER_RUN_LOW;
+  }
+  if (stage == RUN_STAGE_2)
+  {
+    return FAN_POWER_RUN_MED;
+  }
+  if (stage == RUN_STAGE_3)
+  {
+    return FAN_POWER_RUN_HIGH;
   }
 
-  dimmer.setPower(fanPower);
+  return FAN_POWER_DEGRADED;
+}
+
+void applyFanPower(int power)
+{
+  fanPower = clampFanPower(power);
+  fanDriver.setPowerPercent(fanPower);
+}
+
+void setBoilerPhase(BoilerPhase phase, unsigned long nowMs)
+{
+  if (boilerPhase == phase)
+  {
+    return;
+  }
+
+  boilerPhase = phase;
+  boilerPhaseChangedMs = nowMs;
+
+  if (phase != BOILER_STARTUP_FLAME_PROVE)
+  {
+    flameProveSinceMs = 0;
+  }
+  if (phase != BOILER_RUN)
+  {
+    flameLossSinceMs = 0;
+  }
+
+  Serial.print("BOILER PHASE ");
+  Serial.println(boilerPhaseToString(boilerPhase));
+}
+
+void setBoilerLockout(BoilerFault fault, unsigned long nowMs)
+{
+  boilerProcessLockoutLatched = true;
+  boilerFault = fault;
+  burnerFeederCommand = false;
+  feederCycleOn = false;
+  setBoilerPhase(BOILER_LOCKOUT, nowMs);
+  applyFanPower(FAN_POWER_MIN);
+
+  Serial.print("BOILER LOCKOUT ");
+  Serial.println(boilerFaultToString(boilerFault));
+}
+
+void clearBoilerLockout()
+{
+  boilerProcessLockoutLatched = false;
+  boilerFault = BOILER_FAULT_NONE;
+  ignitionRetries = 0;
+  runRestarts = 0;
+  flameProveSinceMs = 0;
+  flameLossSinceMs = 0;
+}
+
+void updateBoilerControl(unsigned long nowMs)
+{
+  burnerFeederCommand = false;
+  pumpOverrunCommand = false;
+  activeRunStage = resolveRunStage();
+
+  bool burnDemand = (currentMode == MODE_AUTO) && thermostatDemand;
+
+  if (safetyState == SAFETY_LOCKOUT)
+  {
+    setBoilerPhase(BOILER_LOCKOUT, nowMs);
+    applyFanPower(FAN_POWER_MIN);
+    return;
+  }
+
+  switch (boilerPhase)
+  {
+  case BOILER_IDLE:
+    feederCycleOn = false;
+    feederCycleChangedMs = nowMs;
+    applyFanPower(FAN_POWER_IDLE);
+
+    if (!burnDemand)
+    {
+      return;
+    }
+
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+
+    if (safetyState == SAFETY_NORMAL && !boilerProcessLockoutLatched)
+    {
+      ignitionRetries = 0;
+      runRestarts = 0;
+      setBoilerPhase(BOILER_STARTUP_PURGE, nowMs);
+      applyFanPower(FAN_POWER_STARTUP_PURGE);
+    }
+    return;
+
+  case BOILER_STARTUP_PURGE:
+    applyFanPower(FAN_POWER_STARTUP_PURGE);
+
+    if (!burnDemand)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_POST_PURGE, nowMs);
+      return;
+    }
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+    if (safetyState != SAFETY_NORMAL || boilerProcessLockoutLatched)
+    {
+      setBoilerPhase(BOILER_IDLE, nowMs);
+      return;
+    }
+    if (nowMs - boilerPhaseChangedMs >= STARTUP_PURGE_MS)
+    {
+      setBoilerPhase(BOILER_STARTUP_FEED, nowMs);
+    }
+    return;
+
+  case BOILER_STARTUP_FEED:
+    applyFanPower(FAN_POWER_STARTUP_FEED);
+    burnerFeederCommand = true;
+
+    if (!burnDemand)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_POST_PURGE, nowMs);
+      return;
+    }
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+    if (safetyState != SAFETY_NORMAL || boilerProcessLockoutLatched)
+    {
+      setBoilerPhase(BOILER_IDLE, nowMs);
+      return;
+    }
+    if (nowMs - boilerPhaseChangedMs >= STARTUP_FEED_MS)
+    {
+      burnerFeederCommand = false;
+      setBoilerPhase(BOILER_STARTUP_FLAME_PROVE, nowMs);
+    }
+    return;
+
+  case BOILER_STARTUP_FLAME_PROVE:
+    applyFanPower(FAN_POWER_STARTUP_PROVE);
+
+    if (!burnDemand)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_POST_PURGE, nowMs);
+      return;
+    }
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+    if (safetyState != SAFETY_NORMAL || boilerProcessLockoutLatched)
+    {
+      setBoilerPhase(BOILER_IDLE, nowMs);
+      return;
+    }
+
+    if (flameOn)
+    {
+      if (flameProveSinceMs == 0)
+      {
+        flameProveSinceMs = nowMs;
+      }
+      if (nowMs - flameProveSinceMs >= STARTUP_FLAME_STABLE_MS)
+      {
+        ignitionRetries = 0;
+        runRestarts = 0;
+        feederCycleOn = false;
+        feederCycleChangedMs = nowMs;
+        setBoilerPhase(BOILER_RUN, nowMs);
+      }
+    }
+    else
+    {
+      flameProveSinceMs = 0;
+    }
+
+    if (nowMs - boilerPhaseChangedMs >= STARTUP_FLAME_PROVE_TIMEOUT_MS)
+    {
+      if (ignitionRetries < STARTUP_MAX_RETRIES)
+      {
+        ignitionRetries++;
+        setBoilerPhase(BOILER_RESTART_DELAY, nowMs);
+      }
+      else
+      {
+        setBoilerLockout(BOILER_FAULT_IGNITION_TIMEOUT, nowMs);
+      }
+    }
+    return;
+
+  case BOILER_RUN:
+    if (!burnDemand)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_OVERRUN, nowMs);
+      applyFanPower(FAN_POWER_SHUTDOWN_OVERRUN);
+      return;
+    }
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+    if (safetyState != SAFETY_NORMAL || boilerProcessLockoutLatched)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_OVERRUN, nowMs);
+      return;
+    }
+
+    updateFeederDurationsByBoiler();
+    updateFeederCycle(nowMs);
+    burnerFeederCommand = feederCycleOn;
+    applyFanPower(computeRunFanPower());
+
+    if (flameOn)
+    {
+      flameLossSinceMs = 0;
+      runRestarts = 0;
+    }
+    else
+    {
+      if (flameLossSinceMs == 0)
+      {
+        flameLossSinceMs = nowMs;
+      }
+      if (nowMs - flameLossSinceMs >= RUN_FLAME_LOSS_CONFIRM_MS)
+      {
+        if (runRestarts < RUN_MAX_RESTARTS)
+        {
+          runRestarts++;
+          setBoilerPhase(BOILER_RESTART_DELAY, nowMs);
+        }
+        else
+        {
+          setBoilerLockout(BOILER_FAULT_FLAME_LOSS, nowMs);
+        }
+      }
+    }
+    return;
+
+  case BOILER_RESTART_DELAY:
+    feederCycleOn = false;
+    applyFanPower(FAN_POWER_RESTART_DELAY);
+
+    if (!burnDemand)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_POST_PURGE, nowMs);
+      return;
+    }
+    if (!sensorsHealthy)
+    {
+      setBoilerLockout(BOILER_FAULT_SENSOR_FAULT, nowMs);
+      return;
+    }
+    if (safetyState != SAFETY_NORMAL || boilerProcessLockoutLatched)
+    {
+      setBoilerPhase(BOILER_IDLE, nowMs);
+      return;
+    }
+    if (nowMs - boilerPhaseChangedMs >= STARTUP_RETRY_DELAY_MS)
+    {
+      setBoilerPhase(BOILER_STARTUP_PURGE, nowMs);
+    }
+    return;
+
+  case BOILER_SHUTDOWN_OVERRUN:
+    pumpOverrunCommand = true;
+    applyFanPower(FAN_POWER_SHUTDOWN_OVERRUN);
+
+    if (nowMs - boilerPhaseChangedMs >= SHUTDOWN_PUMP_OVERRUN_MS)
+    {
+      setBoilerPhase(BOILER_SHUTDOWN_POST_PURGE, nowMs);
+    }
+    return;
+
+  case BOILER_SHUTDOWN_POST_PURGE:
+    feederCycleOn = false;
+    applyFanPower(FAN_POWER_SHUTDOWN_POST_PURGE);
+
+    if (nowMs - boilerPhaseChangedMs >= SHUTDOWN_POST_PURGE_MS)
+    {
+      if (burnDemand && safetyState == SAFETY_NORMAL && sensorsHealthy && !boilerProcessLockoutLatched)
+      {
+        setBoilerPhase(BOILER_STARTUP_PURGE, nowMs);
+      }
+      else
+      {
+        setBoilerPhase(BOILER_IDLE, nowMs);
+      }
+    }
+    return;
+
+  case BOILER_LOCKOUT:
+    feederCycleOn = false;
+    applyFanPower(FAN_POWER_MIN);
+
+    if (boilerProcessLockoutLatched || safetyState == SAFETY_LOCKOUT)
+    {
+      return;
+    }
+
+    if (burnDemand && safetyState == SAFETY_NORMAL && sensorsHealthy)
+    {
+      setBoilerPhase(BOILER_STARTUP_PURGE, nowMs);
+    }
+    else
+    {
+      setBoilerPhase(BOILER_IDLE, nowMs);
+    }
+    return;
+  }
 }
 
 void flame_counts()
@@ -296,14 +710,23 @@ void flame_counts()
     flameCounts = 0;
     flameSum = 0;
   }
+
+  if (flameForceOn)
+  {
+    flameOn = true;
+  }
 }
 
 bool resolveDesiredMotorState(int motorIndex, bool autoDesired)
 {
+  if (boilerProcessLockoutLatched && motorIndex != MOTOR_PH && motorIndex != MOTOR_PWH)
+  {
+    autoDesired = false;
+  }
+
   if (!sensorsHealthy)
   {
-    // Keep non-critical outputs off when temperature sensors are invalid.
-    if (motorIndex == MOTOR_PH || motorIndex == MOTOR_PWH)
+    if (motorIndex != MOTOR_PH && motorIndex != MOTOR_PWH)
     {
       autoDesired = false;
     }
@@ -626,7 +1049,7 @@ void processCommand(char *line)
     char *arg = strtok(NULL, " ");
     if (arg == NULL)
     {
-      Serial.println("ERR RESET usage: RESET <MOTOR|ALL>");
+      Serial.println("ERR RESET usage: RESET <MOTOR|SAFETY|BOILER|ALL>");
       return;
     }
 
@@ -637,6 +1060,8 @@ void processCommand(char *line)
         resetMotorFault(motors[i]);
       }
       safetyLockoutLatched = false;
+      clearBoilerLockout();
+      setBoilerPhase(BOILER_IDLE, millis());
       Serial.println("OK RESET ALL");
       return;
     }
@@ -650,6 +1075,17 @@ void processCommand(char *line)
       }
       safetyLockoutLatched = false;
       Serial.println("OK RESET SAFETY");
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "BOILER"))
+    {
+      clearBoilerLockout();
+      if (safetyState != SAFETY_LOCKOUT)
+      {
+        setBoilerPhase(BOILER_IDLE, millis());
+      }
+      Serial.println("OK RESET BOILER");
       return;
     }
 
@@ -718,6 +1154,85 @@ void processCommand(char *line)
     return;
   }
 
+  if (equalsIgnoreCase(cmd, "FLAME"))
+  {
+    char *arg = strtok(NULL, " ");
+    if (arg == NULL)
+    {
+      Serial.println("ERR FLAME usage: FLAME <AUTO|ON>");
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "AUTO"))
+    {
+      flameForceOn = false;
+      Serial.println("OK FLAME AUTO");
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "ON"))
+    {
+      flameForceOn = true;
+      flameOn = true;
+      Serial.println("OK FLAME ON");
+      return;
+    }
+
+    Serial.println("ERR FLAME invalid");
+    return;
+  }
+
+  if (equalsIgnoreCase(cmd, "STAGE"))
+  {
+    char *arg = strtok(NULL, " ");
+    if (arg == NULL)
+    {
+      Serial.println("ERR STAGE usage: STAGE <AUTO|1|2|3>");
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "AUTO"))
+    {
+      runStageOverrideEnabled = false;
+      activeRunStage = resolveRunStage();
+      Serial.print("OK STAGE AUTO ");
+      Serial.println(runStageToString(activeRunStage));
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "1"))
+    {
+      runStageOverride = RUN_STAGE_1;
+    }
+    else if (equalsIgnoreCase(arg, "2"))
+    {
+      runStageOverride = RUN_STAGE_2;
+    }
+    else if (equalsIgnoreCase(arg, "3"))
+    {
+      runStageOverride = RUN_STAGE_3;
+    }
+    else
+    {
+      Serial.println("ERR STAGE invalid");
+      return;
+    }
+
+    runStageOverrideEnabled = true;
+    activeRunStage = runStageOverride;
+
+    // Apply new stage immediately when already running.
+    if (boilerPhase == BOILER_RUN)
+    {
+      feederCycleOn = false;
+      feederCycleChangedMs = millis();
+    }
+
+    Serial.print("OK STAGE ");
+    Serial.println(runStageToString(runStageOverride));
+    return;
+  }
+
   if (equalsIgnoreCase(cmd, "STATUS"))
   {
     printStatus();
@@ -733,6 +1248,16 @@ void printStatus()
   Serial.print(modeToString(currentMode));
   Serial.print(" SAFETY=");
   Serial.print(safetyStateToString(safetyState));
+  Serial.print(" PHASE=");
+  Serial.print(boilerPhaseToString(boilerPhase));
+  Serial.print(" BFLT=");
+  Serial.print(boilerFaultToString(boilerFault));
+  Serial.print(" B_LOCK=");
+  Serial.print(boilerProcessLockoutLatched ? "1" : "0");
+  Serial.print(" RETRY=");
+  Serial.print(ignitionRetries);
+  Serial.print(" RRESTART=");
+  Serial.print(runRestarts);
   Serial.print(" TEMP_OK=");
   Serial.print(sensorsHealthy ? "1" : "0");
   Serial.print(" B=");
@@ -745,6 +1270,19 @@ void printStatus()
   Serial.print(fanPower);
   Serial.print(" FLAME=");
   Serial.print(flameOn ? "1" : "0");
+  Serial.print(" FL_OVR=");
+  Serial.print(flameForceOn ? "1" : "0");
+  Serial.print(" STG=");
+  if (runStageOverrideEnabled)
+  {
+    Serial.print(runStageToString(runStageOverride));
+  }
+  else
+  {
+    Serial.print("AUTO");
+  }
+  Serial.print(" ASTG=");
+  Serial.print(runStageToString(activeRunStage));
   Serial.print(" FAULTS=");
   Serial.println(countLatchedFaults());
 
@@ -763,6 +1301,8 @@ void printStatus()
 
 void update_lcd(DateTime now)
 {
+  (void)now;
+
   if (millis() - screenPreviousMillis < SCREEN_INTERVAL_MILLIS)
   {
     return;
@@ -770,46 +1310,103 @@ void update_lcd(DateTime now)
 
   screenPreviousMillis = millis();
 
+  char phaseTag = '?';
+  if (boilerPhase == BOILER_IDLE)
+  {
+    phaseTag = 'I';
+  }
+  else if (boilerPhase == BOILER_STARTUP_PURGE)
+  {
+    phaseTag = 'P';
+  }
+  else if (boilerPhase == BOILER_STARTUP_FEED)
+  {
+    phaseTag = 'F';
+  }
+  else if (boilerPhase == BOILER_STARTUP_FLAME_PROVE)
+  {
+    phaseTag = 'V';
+  }
+  else if (boilerPhase == BOILER_RUN)
+  {
+    phaseTag = 'R';
+  }
+  else if (boilerPhase == BOILER_RESTART_DELAY)
+  {
+    phaseTag = 'W';
+  }
+  else if (boilerPhase == BOILER_SHUTDOWN_OVERRUN)
+  {
+    phaseTag = 'O';
+  }
+  else if (boilerPhase == BOILER_SHUTDOWN_POST_PURGE)
+  {
+    phaseTag = 'G';
+  }
+  else if (boilerPhase == BOILER_LOCKOUT)
+  {
+    phaseTag = 'L';
+  }
+
   lcd.setCursor(0, 0);
   lcd.print("M:");
   lcd.print(modeToString(currentMode));
   lcd.print(" S:");
   lcd.print(safetyState == SAFETY_NORMAL ? "N" : (safetyState == SAFETY_DEGRADED ? "D" : "L"));
+  lcd.print(" P:");
+  lcd.print(phaseTag);
   lcd.print(" B:");
   if (sensorsHealthy)
   {
     lcd.print((int)boiler_temp);
-    lcd.print("C ");
+    lcd.print("C");
   }
   else
   {
-    lcd.print("ERR ");
+    lcd.print("ERR");
   }
+  lcd.print("   ");
 
   lcd.setCursor(0, 1);
   lcd.print("HW:");
   if (sensorsHealthy)
   {
     lcd.print((int)hot_water_temp);
-    lcd.print("C ");
+    lcd.print("C");
   }
   else
   {
-    lcd.print("ERR ");
+    lcd.print("ERR");
   }
-  lcd.print("F:");
+  lcd.print(" F:");
   lcd.print(fanPower);
+  lcd.print("% S:");
+  lcd.print(runStageToString(activeRunStage));
+  lcd.print(runStageOverrideEnabled ? "*" : " ");
   lcd.print(" ");
 
   lcd.setCursor(0, 2);
   lcd.print("Fl:");
-  lcd.print(flameOn ? "ON " : "OFF");
+  if (flameOn)
+  {
+    lcd.print(flameForceOn ? "ON*" : "ON ");
+  }
+  else
+  {
+    lcd.print("OFF");
+  }
   lcd.print(" SF:");
   lcd.print(motors[MOTOR_SF].outputOn ? "ON " : "OFF");
+  lcd.print("R:");
+  lcd.print(runRestarts);
+  lcd.print(" ");
 
   lcd.setCursor(0, 3);
-  lcd.print("Faults:");
+  lcd.print("MF:");
   lcd.print(countLatchedFaults());
+  lcd.print(" BF:");
+  lcd.print(boilerFault == BOILER_FAULT_NONE ? "0" : "1");
   lcd.print(" T:");
   lcd.print(thermostatDemand ? "1" : "0");
+  lcd.print(" ");
 }
