@@ -6,20 +6,28 @@ static const unsigned long BUTTON_DEBOUNCE_MS = 80;
 
 // ---------- Temperature / demand ----------
 static const float HOT_WATER_TARGET_C = 60.0f;
-static const float BOILER_LOW_C = 55.0f;
-static const float BOILER_MED_C = 65.0f;
-static const float BOILER_HIGH_C = 75.0f;
+static const float BOILER_MAX_WORK_TEMP_C = 80.0f;
+static const float BOILER_STAGE3_DELTA_C = 17.0f;
+static const float BOILER_STAGE2_DELTA_C = 14.0f;
+static const float BOILER_STAGE1_DELTA_C = 10.0f;
+static const float BOILER_HOUSE_CIRC_MIN_C = 60.0f;
 static const float CHIMNEY_DIRTY_THRESHOLD_C = 130.0f;
 static const float VALID_TEMP_MIN_C = -40.0f;
 static const float VALID_TEMP_MAX_C = 150.0f;
 
 // ---------- Firing stage feeder timing ----------
-static const unsigned long FEEDER_ON_LOW_MS = 2000;
-static const unsigned long FEEDER_OFF_LOW_MS = 30000;
-static const unsigned long FEEDER_ON_MED_MS = 1500;
-static const unsigned long FEEDER_OFF_MED_MS = 60000;
+// Stage 1: cycle 60.0s, feed 1.3s
+static const unsigned long FEEDER_ON_LOW_MS = 1300;
+static const unsigned long FEEDER_OFF_LOW_MS = 58700;
+// Stage 2: cycle 90.0s, feed 1.2s
+static const unsigned long FEEDER_ON_MED_MS = 1200;
+static const unsigned long FEEDER_OFF_MED_MS = 88800;
+// Stage 3: cycle 120.0s, feed 1.0s
 static const unsigned long FEEDER_ON_HIGH_MS = 1000;
-static const unsigned long FEEDER_OFF_HIGH_MS = 90000;
+static const unsigned long FEEDER_OFF_HIGH_MS = 119000;
+// Stage 0 (idle/maintenance): cycle 200.0s, feed 0.5s
+static const unsigned long FEEDER_ON_IDLE_MS = 500;
+static const unsigned long FEEDER_OFF_IDLE_MS = 199500;
 
 // ---------- Stall / anti-jam ----------
 static const unsigned long STALL_DETECT_MS = 300;
@@ -51,9 +59,10 @@ static const unsigned long SHUTDOWN_POST_PURGE_MS = 20000;
 static const int FAN_POWER_MIN = 0;
 static const int FAN_POWER_MAX = 100;
 static const int FAN_POWER_DEGRADED = 20;
-static const int FAN_POWER_RUN_LOW = 80;
-static const int FAN_POWER_RUN_MED = 60;
-static const int FAN_POWER_RUN_HIGH = 40;
+static const int FAN_POWER_RUN_LOW = 13;
+static const int FAN_POWER_RUN_MED = 12;
+static const int FAN_POWER_RUN_HIGH = 10;
+static const int FAN_POWER_RUN_IDLE = 4;
 static const int FAN_POWER_STARTUP_PURGE = 100;
 static const int FAN_POWER_STARTUP_FEED = 85;
 static const int FAN_POWER_STARTUP_PROVE = 70;

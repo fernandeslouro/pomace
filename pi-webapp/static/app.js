@@ -3,11 +3,14 @@ const statusTs = document.getElementById("status-ts");
 const motorBody = document.getElementById("motor-body");
 const commandOutput = document.getElementById("command-output");
 const authorityLine = document.getElementById("authority-line");
+const fanSlider = document.getElementById("fan-slider");
+const fanValueInput = document.getElementById("fan-value");
 
 const summaryOrder = [
   "mode",
   "safety",
   "phase",
+  "opmode",
   "bflt",
   "b_lock",
   "retry",
@@ -17,6 +20,8 @@ const summaryOrder = [
   "hw",
   "wg",
   "fan",
+  "f_ovr",
+  "f_set",
   "flame",
   "fl_ovr",
   "stg",
@@ -109,6 +114,31 @@ async function sendCommand(action, value) {
   }
 }
 
+function clampFanInput(rawValue) {
+  const parsed = Number.parseInt(String(rawValue), 10);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+  if (parsed < 1 || parsed > 100) {
+    return null;
+  }
+  return parsed;
+}
+
+if (fanSlider && fanValueInput) {
+  fanSlider.addEventListener("input", () => {
+    fanValueInput.value = fanSlider.value;
+  });
+
+  fanValueInput.addEventListener("input", () => {
+    const clamped = clampFanInput(fanValueInput.value);
+    if (clamped === null) {
+      return;
+    }
+    fanSlider.value = String(clamped);
+  });
+}
+
 for (const button of document.querySelectorAll("button[data-action]")) {
   button.addEventListener("click", async () => {
     await sendCommand(button.dataset.action, button.dataset.value);
@@ -151,6 +181,36 @@ document.getElementById("motor-jam").addEventListener("click", async () => {
     await refreshStatus();
   } catch (error) {
     commandOutput.textContent = `JAM command error: ${error.message}`;
+  }
+});
+
+document.getElementById("fan-apply").addEventListener("click", async () => {
+  const value = fanValueInput ? clampFanInput(fanValueInput.value) : null;
+  if (value === null) {
+    commandOutput.textContent = "Fan value must be 1-100";
+    return;
+  }
+
+  try {
+    await api("/api/fan", "POST", { value: String(value) });
+    if (fanSlider) {
+      fanSlider.value = String(value);
+    }
+    if (fanValueInput) {
+      fanValueInput.value = String(value);
+    }
+    await refreshStatus();
+  } catch (error) {
+    commandOutput.textContent = `Fan command error: ${error.message}`;
+  }
+});
+
+document.getElementById("fan-auto").addEventListener("click", async () => {
+  try {
+    await api("/api/fan", "POST", { value: "AUTO" });
+    await refreshStatus();
+  } catch (error) {
+    commandOutput.textContent = `Fan command error: ${error.message}`;
   }
 });
 

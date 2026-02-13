@@ -54,9 +54,21 @@
           <h3>Run Stage Override</h3>
           <div class="row">
             <button data-action="stage" data-value="AUTO">AUTO</button>
+            <button data-action="stage" data-value="0">STAGE 0</button>
             <button data-action="stage" data-value="1">STAGE 1</button>
             <button data-action="stage" data-value="2">STAGE 2</button>
             <button data-action="stage" data-value="3">STAGE 3</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Fan Override</h3>
+          <p class="hint">Use <strong>AUTO</strong> to return fan control to the boiler state machine.</p>
+          <div class="row">
+            <input id="fan-slider" type="range" min="1" max="100" step="1" value="40" />
+            <input id="fan-value" type="number" min="1" max="100" step="1" value="40" />
+            <button id="fan-apply">APPLY FAN</button>
+            <button id="fan-auto">FAN AUTO</button>
           </div>
         </div>
 

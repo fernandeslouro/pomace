@@ -1,5 +1,6 @@
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include "control_config.h"
 #include "hardware_profile.h"
 
@@ -129,6 +130,10 @@ const char *boilerFaultToString(BoilerFault fault)
 
 const char *runStageToString(RunStage stage)
 {
+  if (stage == RUN_STAGE_0)
+  {
+    return "0";
+  }
   if (stage == RUN_STAGE_1)
   {
     return "1";
@@ -138,6 +143,47 @@ const char *runStageToString(RunStage stage)
     return "2";
   }
   return "3";
+}
+
+const char *operatingModeToString(OperatingModeLabel mode)
+{
+  if (mode == OP_MODE_FLAME_DETECT)
+  {
+    return "FLAME_DETECT";
+  }
+  if (mode == OP_MODE_HEATING)
+  {
+    return "HEATING";
+  }
+  if (mode == OP_MODE_WORKING)
+  {
+    return "WORKING";
+  }
+  return "IDLE";
+}
+
+void updateOperatingModeLabel()
+{
+  if (boilerPhase == BOILER_STARTUP_FLAME_PROVE)
+  {
+    operatingMode = OP_MODE_FLAME_DETECT;
+    return;
+  }
+
+  if (boilerPhase == BOILER_RUN)
+  {
+    if (activeRunStage == RUN_STAGE_0)
+    {
+      operatingMode = OP_MODE_WORKING;
+    }
+    else
+    {
+      operatingMode = OP_MODE_HEATING;
+    }
+    return;
+  }
+
+  operatingMode = OP_MODE_IDLE;
 }
 
 void updateSafetyState()
@@ -287,6 +333,12 @@ void updateFeederDurationsByBoiler()
   RunStage stage = resolveRunStage();
   activeRunStage = stage;
 
+  if (stage == RUN_STAGE_0)
+  {
+    feederOnMs = FEEDER_ON_IDLE_MS;
+    feederOffMs = FEEDER_OFF_IDLE_MS;
+    return;
+  }
   if (stage == RUN_STAGE_1)
   {
     feederOnMs = FEEDER_ON_LOW_MS;
@@ -325,19 +377,22 @@ RunStage resolveRunStage()
   {
     return RUN_STAGE_3;
   }
-  if (boiler_temp <= BOILER_LOW_C)
+
+  // Heat-up profile: progress 1 -> 2 -> 3 as temperature approaches target.
+  const float deltaToMax = BOILER_MAX_WORK_TEMP_C - boiler_temp;
+  if (deltaToMax > BOILER_STAGE3_DELTA_C)
   {
     return RUN_STAGE_1;
   }
-  if (boiler_temp <= BOILER_MED_C)
+  if (deltaToMax >= BOILER_STAGE2_DELTA_C)
   {
     return RUN_STAGE_2;
   }
-  if (boiler_temp <= BOILER_HIGH_C)
+  if (deltaToMax >= BOILER_STAGE1_DELTA_C)
   {
     return RUN_STAGE_3;
   }
-  return RUN_STAGE_3;
+  return RUN_STAGE_0;
 }
 
 int clampFanPower(int power)
@@ -358,6 +413,10 @@ int computeRunFanPower()
   RunStage stage = resolveRunStage();
   activeRunStage = stage;
 
+  if (stage == RUN_STAGE_0)
+  {
+    return FAN_POWER_RUN_IDLE;
+  }
   if (stage == RUN_STAGE_1)
   {
     return FAN_POWER_RUN_LOW;
@@ -376,7 +435,19 @@ int computeRunFanPower()
 
 void applyFanPower(int power)
 {
-  fanPower = clampFanPower(power);
+  int requested = clampFanPower(power);
+
+  if (currentMode == MODE_REMOTE && fanOverrideEnabled)
+  {
+    requested = clampFanPower(fanOverridePower);
+  }
+
+  if (safetyState == SAFETY_LOCKOUT)
+  {
+    requested = FAN_POWER_MIN;
+  }
+
+  fanPower = requested;
   fanDriver.setPowerPercent(fanPower);
 }
 
@@ -432,7 +503,7 @@ void updateBoilerControl(unsigned long nowMs)
   pumpOverrunCommand = false;
   activeRunStage = resolveRunStage();
 
-  bool burnDemand = (currentMode == MODE_AUTO) && thermostatDemand;
+  bool burnDemand = (currentMode == MODE_AUTO) && thermostatDemand && (!sensorsHealthy || boiler_temp < BOILER_MAX_WORK_TEMP_C);
 
   if (safetyState == SAFETY_LOCKOUT)
   {
@@ -1187,7 +1258,7 @@ void processCommand(char *line)
     char *arg = strtok(NULL, " ");
     if (arg == NULL)
     {
-      Serial.println("ERR STAGE usage: STAGE <AUTO|1|2|3>");
+      Serial.println("ERR STAGE usage: STAGE <AUTO|0|1|2|3>");
       return;
     }
 
@@ -1200,7 +1271,11 @@ void processCommand(char *line)
       return;
     }
 
-    if (equalsIgnoreCase(arg, "1"))
+    if (equalsIgnoreCase(arg, "0"))
+    {
+      runStageOverride = RUN_STAGE_0;
+    }
+    else if (equalsIgnoreCase(arg, "1"))
     {
       runStageOverride = RUN_STAGE_1;
     }
@@ -1233,6 +1308,43 @@ void processCommand(char *line)
     return;
   }
 
+  if (equalsIgnoreCase(cmd, "FAN"))
+  {
+    char *arg = strtok(NULL, " ");
+    if (arg == NULL)
+    {
+      Serial.println("ERR FAN usage: FAN <AUTO|0-100>");
+      return;
+    }
+
+    if (equalsIgnoreCase(arg, "AUTO"))
+    {
+      fanOverrideEnabled = false;
+      Serial.println("OK FAN AUTO");
+      return;
+    }
+
+    char *endPtr = NULL;
+    long requested = strtol(arg, &endPtr, 10);
+    if (endPtr == arg || *endPtr != '\0')
+    {
+      Serial.println("ERR FAN invalid");
+      return;
+    }
+    if (requested < FAN_POWER_MIN || requested > FAN_POWER_MAX)
+    {
+      Serial.println("ERR FAN range");
+      return;
+    }
+
+    fanOverrideEnabled = true;
+    fanOverridePower = (int)requested;
+    applyFanPower(fanOverridePower);
+    Serial.print("OK FAN ");
+    Serial.println(fanOverridePower);
+    return;
+  }
+
   if (equalsIgnoreCase(cmd, "STATUS"))
   {
     printStatus();
@@ -1244,12 +1356,16 @@ void processCommand(char *line)
 
 void printStatus()
 {
+  updateOperatingModeLabel();
+
   Serial.print("MODE=");
   Serial.print(modeToString(currentMode));
   Serial.print(" SAFETY=");
   Serial.print(safetyStateToString(safetyState));
   Serial.print(" PHASE=");
   Serial.print(boilerPhaseToString(boilerPhase));
+  Serial.print(" OPMODE=");
+  Serial.print(operatingModeToString(operatingMode));
   Serial.print(" BFLT=");
   Serial.print(boilerFaultToString(boilerFault));
   Serial.print(" B_LOCK=");
@@ -1268,6 +1384,10 @@ void printStatus()
   Serial.print(waste_gas_temp);
   Serial.print(" FAN=");
   Serial.print(fanPower);
+  Serial.print(" F_OVR=");
+  Serial.print(fanOverrideEnabled ? "1" : "0");
+  Serial.print(" F_SET=");
+  Serial.print(fanOverridePower);
   Serial.print(" FLAME=");
   Serial.print(flameOn ? "1" : "0");
   Serial.print(" FL_OVR=");

@@ -70,7 +70,16 @@ enum RunStage
 {
   RUN_STAGE_1,
   RUN_STAGE_2,
-  RUN_STAGE_3
+  RUN_STAGE_3,
+  RUN_STAGE_0
+};
+
+enum OperatingModeLabel
+{
+  OP_MODE_IDLE,
+  OP_MODE_FLAME_DETECT,
+  OP_MODE_HEATING,
+  OP_MODE_WORKING
 };
 
 struct MotorControl
@@ -147,6 +156,8 @@ unsigned int flameCounts = 0;
 unsigned int flameSum = 0;
 
 int fanPower = FAN_POWER_IDLE;
+bool fanOverrideEnabled = false;
+int fanOverridePower = FAN_POWER_IDLE;
 bool chimney_needs_clean = false;
 bool highLimitTripped = false;
 bool backfireTripped = false;
@@ -174,6 +185,7 @@ bool pumpOverrunCommand = false;
 bool runStageOverrideEnabled = false;
 RunStage runStageOverride = RUN_STAGE_1;
 RunStage activeRunStage = RUN_STAGE_1;
+OperatingModeLabel operatingMode = OP_MODE_IDLE;
 
 // ---------- Operator controls ----------
 ControlMode currentMode = MODE_AUTO;
@@ -207,6 +219,7 @@ const char *safetyStateToString(SafetyState state);
 const char *boilerPhaseToString(BoilerPhase phase);
 const char *boilerFaultToString(BoilerFault fault);
 const char *runStageToString(RunStage stage);
+const char *operatingModeToString(OperatingModeLabel mode);
 int countLatchedFaults();
 void updateThermostatDemand();
 void updateSafetyState();
@@ -224,6 +237,7 @@ void updateFeederCycle(unsigned long nowMs);
 int clampFanPower(int power);
 int computeRunFanPower();
 void applyFanPower(int power);
+void updateOperatingModeLabel();
 void flame_counts();
 
 bool resolveDesiredMotorState(int motorIndex, bool autoDesired);
@@ -306,10 +320,11 @@ void loop()
   chimney_needs_clean = sensorsHealthy && waste_gas_temp > CHIMNEY_DIRTY_THRESHOLD_C;
   updateSafetyState();
   updateBoilerControl(nowMs);
+  updateOperatingModeLabel();
 
   bool autoDesired[MOTOR_COUNT] = {false};
   autoDesired[MOTOR_SF] = burnerFeederCommand;
-  autoDesired[MOTOR_PH] = thermostatDemand || pumpOverrunCommand;
+  autoDesired[MOTOR_PH] = pumpOverrunCommand || (thermostatDemand && sensorsHealthy && (boiler_temp >= BOILER_HOUSE_CIRC_MIN_C));
   autoDesired[MOTOR_PWH] = pumpOverrunCommand || (sensorsHealthy ? (hot_water_temp < HOT_WATER_TARGET_C) : false);
   autoDesired[MOTOR_SB] = false;
   autoDesired[MOTOR_FSG] = burnerFeederCommand;

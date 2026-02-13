@@ -98,6 +98,15 @@ input {
   padding: 8px 10px;
 }
 
+input[type="range"] {
+  max-width: 260px;
+  padding: 0;
+}
+
+input[type="number"] {
+  max-width: 110px;
+}
+
 select {
   border: 1px solid var(--line);
   border-radius: 8px;

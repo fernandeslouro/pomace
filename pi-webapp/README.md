@@ -8,7 +8,8 @@ This folder contains a Raspberry Pi web app for local boiler monitoring/control.
 - Shows control authority (`FULL` only when effective mode is `REMOTE`)
 - Supports overrides already in firmware:
   - `FLAME ON/AUTO`
-  - `STAGE 1/2/3/AUTO`
+  - `STAGE 0/1/2/3/AUTO`
+  - `FAN <AUTO|0..100>`
   - `SET <MOTOR> <ON|OFF|AUTO>`
   - `JAM <MOTOR>`
 
@@ -30,7 +31,8 @@ Open: `http://<pi-ip>:8080`
 - `POST /api/mode` body: `{"mode":"AUTO|OFF|REMOTE"}`
 - `POST /api/thermostat` body: `{"state":"AUTO|0|1"}`
 - `POST /api/flame` body: `{"state":"AUTO|ON"}`
-- `POST /api/stage` body: `{"stage":"AUTO|1|2|3"}`
+- `POST /api/stage` body: `{"stage":"AUTO|0|1|2|3"}`
+- `POST /api/fan` body: `{"value":"AUTO|0..100"}`
 - `POST /api/motor` body: `{"motor":"SF|PH|PWH|SB|FSG|FC|STORAGE|CRUSHER","state":"AUTO|ON|OFF"}`
 - `POST /api/jam` body: `{"motor":"SF|PH|PWH|SB|FSG|FC|STORAGE|CRUSHER"}`
 - `POST /api/reset` body: `{"target":"BOILER|SAFETY|ALL|<MOTOR>"}`

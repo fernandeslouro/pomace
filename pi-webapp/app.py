@@ -61,7 +61,11 @@ class FlamePayload(BaseModel):
 
 
 class StagePayload(BaseModel):
-    stage: Literal["AUTO", "1", "2", "3"]
+    stage: Literal["AUTO", "0", "1", "2", "3"]
+
+
+class FanPayload(BaseModel):
+    value: str = Field(min_length=1, max_length=8)
 
 
 class ResetPayload(BaseModel):
@@ -247,6 +251,22 @@ def set_flame(payload: FlamePayload) -> dict:
 @app.post("/api/stage")
 def set_stage(payload: StagePayload) -> dict:
     return _exec_command(f"STAGE {payload.stage}")
+
+
+@app.post("/api/fan")
+def set_fan(payload: FanPayload) -> dict:
+    value = payload.value.strip().upper()
+    if value == "AUTO":
+        return _exec_command("FAN AUTO")
+
+    if not value.isdigit():
+        raise HTTPException(status_code=422, detail="Fan value must be AUTO or 0-100")
+
+    fan_value = int(value)
+    if fan_value < 0 or fan_value > 100:
+        raise HTTPException(status_code=422, detail="Fan value must be AUTO or 0-100")
+
+    return _exec_command(f"FAN {fan_value}")
 
 
 @app.post("/api/motor")
