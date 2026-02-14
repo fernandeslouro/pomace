@@ -3,7 +3,13 @@
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <RBDdimmer.h>
+
+// Fan motor control is now done with a VFD:
+// - RUN/STOP through a digital output (to a relay or direct DI, depending on VFD wiring)
+// - Speed as 0..100% through PWM (use PWM-to-0..10V module for VFD analog input)
+
+void vfdControlBegin();
+void vfdSetSpeedPercent(int percent);
 
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
@@ -17,12 +23,8 @@ const int pinCentralHeatingPump = 10;
 const int pinStorageFeeder = 11;
 const int pinFlameSensor = A0;
 const int buttonPin = 13;
-const int dimmerOutputPin = 3;
 const int pinOneWireTempSensors = 7;
 bool relays = true;
-
-
-dimmerLamp dimmer(dimmerOutputPin); //initialase port for dimmer for MEGA, Leonardo, UNO, Arduino M0, Arduino Zero 
 
 // Temperature Sensors
 OneWire oneWire(pinOneWireTempSensors); // Setup a oneWire instance to communicate with any OneWire devices
@@ -68,8 +70,6 @@ void setup()
 {
   Serial.begin(9600);
 
-  dimmer.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE)
-
   lcd.init(); // initialize the lcd
   lcd.backlight();
   
@@ -96,6 +96,8 @@ void setup()
   rtc.begin();
   Serial.println("Done");
 
+  vfdControlBegin();
+
 
   //checkflame(pinFlameSensor, 800, 3, 1000);
 }
@@ -111,6 +113,7 @@ void loop()
   waste_gas_temp = sensors.getTempCByIndex(2);
 
   motor_control(boiler_temp, &onDuration, &offDuration, &fanPower);
+  vfdSetSpeedPercent(fanPower);
 
   if (motor_running == LOW)
   {

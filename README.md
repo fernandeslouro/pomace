@@ -36,20 +36,25 @@ Components Required:
  - 4 4.7 Ohm resistors to use with temperatrure sensor [BOUGHT]
  - 10K Ohm, 100K Ohm resistors [BOUGHT]
  - Buttons of some sort [BOUGHT]
- - Dimmer module [BOUGHT]
+ - ESP32 board for control logic (or keep Mega + adapt interface) [TO CONFIRM]
+ - VFD / Inverter (230V single-phase in -> 230V three-phase out), minimum 0.18 kW [TO BUY]
+ - 1-channel optocoupled relay module for VFD RUN/STOP command [TO BUY]
+ - MAX485 (RS485) module for ESP <-> VFD speed command (preferred), or PWM-to-0..10V module [TO BUY]
+ - Electrical enclosure, DIN rail, proper breaker/fuse, earth wiring for VFD/motor safety [TO BUY]
+ - Dimmer module [BOUGHT, not used for this fan motor]
  - Flame sensor  [BOUGHT, need a more heavy duty one]
- - 6X (at least) Extension cords to use with relays/dimmer (boiler feeder, hot water pump, radiators pump, ashes feeder, fan motor, large feeder) https://www.amazon.es/Brennenstuhl-Alargo-europeo-3-m/dp/B004AQTFWY/ref=sr_1_6?__mk_es_ES=%C3%85M%C3%85%C5%BD%C3%95%C3%91&crid=WNHPZ8I7D70B&keywords=alargadera+enchufe&qid=1641738516&sprefix=alargadera+enchuf%2Caps%2C187&sr=8-6
+ - 6X (at least) Extension cords to use with relays/VFD wiring (boiler feeder, hot water pump, radiators pump, ashes feeder, fan motor, large feeder) https://www.amazon.es/Brennenstuhl-Alargo-europeo-3-m/dp/B004AQTFWY/ref=sr_1_6?__mk_es_ES=%C3%85M%C3%85%C5%BD%C3%95%C3%91&crid=WNHPZ8I7D70B&keywords=alargadera+enchufe&qid=1641738516&sprefix=alargadera+enchuf%2Caps%2C187&sr=8-6
  - SD Card Module and SD Card
 
  Currenly missing to get system working:
-  - Dimmer working with Fan Control
+  - VFD integrated with Fan Control (RUN/STOP + speed setpoint)
   - Temperature sensor from hot water
   - Thermostat working (kind of optional)
   - Connections with wires to motors
 
 Interrupts
  - Needed for menus
- - Needed for motor control/dimmer
+ - Fan speed control via VFD communication (RS485 preferred) instead of AC dimmer interrupt
 
 Web server should be able to:
  - Show the present state of the boiler
@@ -61,9 +66,10 @@ Data Storage:
  - Stored into SD card
 
  Motor control:
- - I think I can afford to spare one interrupt pin for the dimmer
- - I need to control the speed of an AC single-phase motor
- - 50 Hz, 220 V, 0.09 kW, 2800 RPM
+ - Fan motor label: 3-phase, 220 V Delta / 380 V Star, 0.09 kW, ~2800 RPM
+ - To control speed from ESP/Mega: use VFD (1~230V in -> 3~230V out), motor wired in Delta (220 V)
+ - Control interface: digital RUN/STOP + speed setpoint over RS485 (or analog 0..10 V)
+ - Keep software fan power percent (0-100), map that to VFD frequency command (for example 20-50 Hz)
 
 
 Resources:
@@ -71,11 +77,10 @@ Resources:
  - Connect several relays with a single wire https://create.arduino.cc/projecthub/Pedro52/arduino-with-neopixel-optocouplers-controlling-many-relays-5f2573
  - Connect a thermostat to Arduino https://electronics.stackexchange.com/questions/60857/thermostat-connections-with-arduino
  - Connect the temperature sensors https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
- - How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
+ - (Legacy idea, not valid for this 3-phase motor) How to dim the Fan Motor: https://www.instructables.com/AC-Dimming-and-AC-Motor-Speed-Control-How-to-With-/
  - How to setup the light detector (just a photoresistor): https://create.arduino.cc/projecthub/ccPegasus/photoresistor-brightness-sensor-db3110
  - How to solder I²C module to LCD https://www.youtube.com/watch?v=jTqOqmjpMIQ
  - https://mauser.pt/catalog/
  - https://github.com/marcass/furnace_control
  - https://www.instructables.com/Arduino-Pellet-Stove-Controller/
  - https://www.youtube.com/watch?v=_Zg5DRCHWfk
-

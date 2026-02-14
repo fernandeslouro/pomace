@@ -91,25 +91,27 @@ void checkflame(int flamepin, int flame_min_light, int counts, int delay_btw_cou
 
 void motor_control(int boiler_temperature, unsigned long *onDuration, unsigned long *offDuration, int *fanPower)
 {
-  if (boiler_temperature < 55)
+  if (boiler_temperature <= 55)
   {
     *onDuration = 2000;
     *offDuration = 30000;
     *fanPower = 30;
   }
-  else if (boiler_temperature > 55 && boiler_temperature < 65)
+  else if (boiler_temperature <= 65)
   {
     *onDuration = 1000;
     *offDuration = 60000;
     *fanPower = 20;
   }
-  else if (boiler_temperature > 65)
+  else
   {
     *onDuration = 1000;
     *offDuration = 90000;
     *fanPower = 10;
   }
-  dimmer.setPower(*fanPower);
+
+  // Fan command is always 0..100 with 1-step resolution.
+  *fanPower = constrain(*fanPower, 0, 100);
 }
 
 void flame_counts()
