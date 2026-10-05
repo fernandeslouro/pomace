@@ -45,6 +45,29 @@ Date of analysis: 2026-02-13
 4. Full fan motor top line (if manufacturer/type field exists above the visible rows).
 5. Exact function of the external `IP54` 2-gang switch station.
 
+## Terminal Connections and Fan Follow-up (2026-10-03)
+
+User reports the following Naturela output terminal connections after inspecting the panel:
+
+| Terminal | Function | Connection reported |
+|---|---|---|
+| FM | Main fan | Connected |
+| SF | Fuel feed screw | Connected |
+| PWH | Hot water circulation pump | Connected |
+| PH | Heating circulation pump | Connected |
+| FSG | Flue-gas fan | Not connected |
+| SB | Internal screw | Not connected |
+| IGN | Ignition heater | Not connected |
+| FC | Cleaning fan | Not connected |
+
+These are output terminals, not sensor inputs. Cable destinations have not been traced; ACF connection status has not been reported.
+
+Fan speed visibly increases when its 0–100 setting is increased on the Naturela control unit. New motor photos confirm reference `00QW3530`, `220V Δ / 380V Y`, `0.53A / 0.32A`, `0.09 kW`, `2800 rpm`, `50 Hz`, `IP44`, insulation class B. The connected Ducati Energia capacitor is `4 µF ±5%`, marked `425 VAC / 30000 h`, `475 VAC / 10000 h`, and `500 VAC / 3000 h`.
+
+The Naturela technical manual (pages 9–11) distinguishes the mains-powered FM output from optional ACF analog control for an external inverter. FM being connected supports a mains fan control path, but does not establish the exact motor wiring or rule out an intermediate device. Replacement fan power controller selection remains pending; a 0–10V module alone cannot supply the motor.
+
+Procurement: hold the fan analog output module until the replacement power controller and its command interface are selected. The current firmware still maps SB despite SB being reported unconnected; review this separately before commissioning.
+
 ## Minimum Extra Photos To Close Gaps
 
 1. Tight, front-on photo of `LC1D09` side label (coil voltage line).

@@ -7,7 +7,7 @@ Replace the existing Naturela NPBC-V3M boiler controller with a programmable con
 - Country: Portugal (`230 VAC`, `50 Hz`)
 - Reuse existing contactors
 - Reuse existing sensors
-- Keep analog fan output path
+- Fan control interface pending confirmation; existing Naturela `FM` output is connected. Hold the analog output module purchase until a compatible fan power controller is selected.
 - Do not switch motor loads directly from controller outputs; use contactor/interposing stage
 - Door switch not used
 - Anti-jam applies to all motors except `FM`
@@ -91,7 +91,11 @@ Estimated control subtotal (without optional relay expansion): `~152-218 EUR`
 2. Thermostat type (dry contact or powered output)
 3. Sensor electrical type (`NTC10K`, `PT100`, `PT1000`, other)
 4. Optional points in use: `PT100/PT1000`, `NRC/IR`
-5. Fan motor current and capacitor from nameplate
+5. Replacement fan power controller and command interface (motor confirmed `90W`, `220V Δ / 380V Y`, `0.53A / 0.32A`; connected capacitor `4 µF ±5%`)
+
+Panel connections reported on 2026-10-03: `FM`, `SF`, `PWH`, `PH` connected; `FSG`, `SB`, `IGN`, `FC` not connected. Cable destinations remain untraced; `ACF` status is unknown. See `CURRENT_HARDWARE_INVENTORY.md` for details. The analog output module remains tentative, and the budget excludes the fan power controller.
+
+Latest checkpoint: [PROGRESS_HANDOFF.md](PROGRESS_HANDOFF.md) records the affordable FSC230/10 candidate, compatibility limitations and next steps. [PURCHASE_READINESS.md](PURCHASE_READINESS.md) tracks what still prevents a complete order-ready kit.
 
 ## Serial Overrides
 - Force flame detected: `FLAME ON`
